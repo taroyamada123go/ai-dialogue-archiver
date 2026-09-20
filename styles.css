@@ -93,3 +93,119 @@ body.viewer-open{overflow:hidden}.library-viewer{position:fixed;inset:0;z-index:
   .viewer-search-count{grid-column:1!important;grid-row:2!important;justify-self:end}.viewer-search-box{grid-column:2!important;grid-row:2!important}.viewer-preview-button{grid-column:3!important;grid-row:2!important}
   .viewer-layer-trigger,.viewer-overview-control{font-size:.72rem!important;letter-spacing:-.01em}
 }
+
+/* v0.5.2 — control material + sizing refinement (authoritative overrides) */
+.library-viewer{
+  /* Reference: v15 UI11.4 black controls — roomier, graphite rather than near-black. */
+  --v-primary-control-width:220px;
+  --v-black-top:rgba(86,87,92,.98);
+  --v-black-mid:rgba(59,60,65,.98);
+  --v-black-bottom:rgba(38,39,43,.99);
+  --v-black-border:rgba(15,16,18,.88);
+  --v-surface-light-fg:#4d5057;
+  --v-surface-dark-fg:#d3d5da;
+  --v-theme-dark-dot:#404248;
+  --v-theme-light-dot:#d7d9de;
+}
+
+/* Overview / 3-layer control: same footprint, same material in Light and Dark. */
+.viewer-black-control,.viewer-layer-trigger,.viewer-search-go{
+  background:linear-gradient(to bottom,var(--v-black-top) 0%,var(--v-black-mid) 48%,var(--v-black-bottom) 100%)!important;
+  border-color:var(--v-black-border)!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.34),
+    inset 0 -1px 0 rgba(0,0,0,.72),
+    inset 0 0 7px rgba(255,255,255,.035),
+    0 2px 5px rgba(0,0,0,.34),
+    0 1px 1px rgba(0,0,0,.28)!important;
+  text-shadow:0 1px 1px rgba(0,0,0,.66)!important;
+}
+.viewer-black-control,.viewer-layer-trigger{
+  height:36px!important;
+  min-height:36px!important;
+  font-size:.91rem!important;
+  padding:6px 12px!important;
+  letter-spacing:0!important;
+}
+.viewer-overview-control,.viewer-layer-control,.viewer-layer-trigger{
+  width:var(--v-primary-control-width)!important;
+}
+.viewer-layer-trigger{min-width:0!important}
+.viewer-layer-menu{
+  top:41px!important;
+  width:var(--v-primary-control-width)!important;
+  min-width:var(--v-primary-control-width)!important;
+  padding:5px!important;
+  border:1px solid rgba(255,255,255,.15)!important;
+  border-radius:5px!important;
+  background:linear-gradient(to bottom,rgba(78,79,84,.86),rgba(45,46,51,.82) 50%,rgba(24,25,29,.80))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 9px 24px rgba(0,0,0,.30)!important;
+  backdrop-filter:blur(13px)!important;
+  -webkit-backdrop-filter:blur(13px)!important;
+}
+.viewer-layer-menu button{
+  height:36px!important;
+  min-height:36px!important;
+  padding:6px 10px!important;
+  color:rgba(244,245,247,.96)!important;
+  font-size:.90rem!important;
+  font-weight:650!important;
+  text-shadow:0 1px 1px rgba(0,0,0,.55);
+}
+.viewer-layer-menu button:active{background:rgba(255,255,255,.12)!important}
+
+/* Preview / Transcript + top-right controls: deeper glass, especially in Dark. */
+.viewer-preview-button,.viewer-surface-icon{
+  color:var(--v-surface-light-fg)!important;
+  border:1px solid rgba(190,193,199,.94)!important;
+  background:linear-gradient(to bottom,rgba(255,255,255,.96) 0%,rgba(246,247,249,.82) 45%,rgba(218,220,225,.72) 100%)!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.98),
+    inset 0 -1px 0 rgba(71,74,80,.16),
+    inset 0 0 9px rgba(255,255,255,.28),
+    0 3px 6px rgba(0,0,0,.19),
+    0 1px 1px rgba(0,0,0,.12)!important;
+  backdrop-filter:blur(9px);
+  -webkit-backdrop-filter:blur(9px);
+  text-shadow:0 1px 0 rgba(255,255,255,.58)!important;
+  transition:transform .05s ease,box-shadow .05s ease;
+}
+.dark-theme .viewer-preview-button,.dark-theme .viewer-surface-icon{
+  color:var(--v-surface-dark-fg)!important;
+  border-color:rgba(105,109,118,.90)!important;
+  background:linear-gradient(to bottom,rgba(96,98,105,.88) 0%,rgba(65,67,74,.80) 47%,rgba(37,39,45,.84) 100%)!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.30),
+    inset 0 -1px 0 rgba(0,0,0,.50),
+    inset 0 0 10px rgba(255,255,255,.035),
+    0 3px 7px rgba(0,0,0,.40),
+    0 1px 1px rgba(0,0,0,.30)!important;
+  text-shadow:0 1px 1px rgba(0,0,0,.52)!important;
+}
+.viewer-preview-button:active,.viewer-surface-icon:active{
+  transform:translateY(1px);
+  box-shadow:inset 0 2px 4px rgba(0,0,0,.20),0 1px 2px rgba(0,0,0,.17)!important;
+}
+.dark-theme .viewer-preview-button:active,.dark-theme .viewer-surface-icon:active{
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.48),0 1px 2px rgba(0,0,0,.34)!important;
+}
+
+/* Top-right glyphs use the same palette, not absolute black/white. */
+.viewer-surface-icon{color:var(--v-surface-light-fg)!important}
+.dark-theme .viewer-surface-icon{color:var(--v-surface-dark-fg)!important}
+.viewer-theme-dot{color:var(--v-theme-dark-dot)!important;text-shadow:0 1px 0 rgba(255,255,255,.30)!important}
+.dark-theme .viewer-theme-dot{color:var(--v-theme-light-dot)!important;text-shadow:0 1px 1px rgba(0,0,0,.44)!important}
+.viewer-back-icon{color:var(--v-surface-light-fg)!important}
+.dark-theme .viewer-back-icon{color:var(--v-surface-dark-fg)!important}
+
+/* Keep the roomier black controls usable at tablet/phone widths without truncating them aggressively. */
+@media(max-width:760px){
+  .library-viewer{--v-primary-control-width:clamp(170px,33vw,220px)}
+  .viewer-layer-trigger,.viewer-overview-control{font-size:.82rem!important;padding-left:10px!important;padding-right:10px!important}
+  .viewer-layer-menu button{font-size:.82rem!important}
+}
+@media(max-width:520px){
+  .library-viewer{--v-primary-control-width:min(172px,calc((100vw - 34px)/2))}
+  .viewer-layer-trigger,.viewer-overview-control{font-size:.72rem!important;padding-left:7px!important;padding-right:7px!important;letter-spacing:-.012em!important}
+  .viewer-layer-menu button{font-size:.74rem!important;padding-left:7px!important;padding-right:7px!important}
+}
