@@ -11,7 +11,7 @@ import { protectFragmentForDisplay, externalUrlFromGate } from './src/network-po
 
 const state={
   mode:'quick',sources:[],comparison:null,autoMatches:[],installPrompt:null,
-  library:[],viewerArchive:null,viewerCurrentNode:null,viewerLayer:'visual',viewerMatches:[],viewerMatchIndex:-1,viewerImages:[],viewerImageMetaVisible:true,viewerTranscriptScrollTop:0,
+  library:[],viewerArchive:null,viewerCurrentNode:null,viewerLayer:'visual',viewerMatches:[],viewerMatchIndex:-1,viewerImages:[],viewerImageMetaVisible:true,viewerTranscriptScrollTop:0,viewerSearchOrigin:null,viewerLastSearchQuery:'',
 };
 const $=id=>document.getElementById(id);
 
@@ -39,8 +39,11 @@ function setup(){
   });
 
   $('viewerCloseBtn').addEventListener('click',closeViewer);
-  $('viewerMoreBtn').addEventListener('click',e=>{e.stopPropagation();$('viewerActions').hidden=!$('viewerActions').hidden;});
+  const toggleActions=e=>{e.stopPropagation();$('viewerActions').hidden=!$('viewerActions').hidden;};
+  $('viewerMoreBtn').addEventListener('click',toggleActions);
+  $('viewerPreviewMoreBtn').addEventListener('click',toggleActions);
   $('viewerThemeBtn').addEventListener('click',toggleViewerTheme);
+  $('viewerPreviewThemeBtn').addEventListener('click',toggleViewerTheme);
   $('viewerHistoryBtn').addEventListener('click',()=>{$('viewerHistoryPanel').hidden=!$('viewerHistoryPanel').hidden;});
   $('viewerOverviewBtn').addEventListener('click',toggleViewerOverview);
   $('viewerLayerTrigger').addEventListener('click',e=>{e.stopPropagation();$('viewerLayerCtl').classList.toggle('open');});
@@ -50,7 +53,8 @@ function setup(){
   $('viewerDeleteBtn').addEventListener('click',deleteViewerArchive);
   $('viewerTopBtn').addEventListener('click',()=>{$('libraryViewer').scrollTo({top:0,behavior:'smooth'});});
   $('viewerBottomBtn').addEventListener('click',()=>{$('libraryViewer').scrollTo({top:$('libraryViewer').scrollHeight,behavior:'smooth'});});
-  $('viewerSearch').addEventListener('input',()=>applyViewerSearch({jumpToFirst:false,resetIndex:true}));
+  $('viewerSearch').addEventListener('input',handleViewerSearchInput);
+  $('viewerSearch').addEventListener('search',handleViewerSearchInput);
   $('viewerSearch').addEventListener('keydown',e=>{
     if(e.key==='Enter'&&!e.isComposing){e.preventDefault();moveViewerMatch(e.shiftKey?-1:1);}
   });
@@ -60,18 +64,13 @@ function setup(){
   $('viewerTranscriptBtn').addEventListener('click',()=>closeViewerPreview(true));
   $('viewerImageIndexBtn').addEventListener('click',toggleViewerImageMeta);
   $('viewerImagePromptsBtn').addEventListener('click',toggleViewerImagePrompts);
-  $('viewerPreviewGrid').addEventListener('click',e=>{
-    const item=e.target.closest('[data-preview-node]');
-    if(!item)return;
-    const nodeId=item.dataset.previewNode;
-    closeViewerPreview(false);
-    setViewerLayer('visual');
-    requestAnimationFrame(()=>document.querySelector(`[data-node-id="${cssEscape(nodeId)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}));
-  });
+  $('viewerPreviewGrid').addEventListener('click',handleViewerPreviewClick);
+  $('viewerImageLightboxClose').addEventListener('click',closeViewerImageLightbox);
+  $('viewerImageLightbox').addEventListener('click',e=>{if(e.target===$('viewerImageLightbox'))closeViewerImageLightbox();});
   $('viewerTranscript').addEventListener('click',handleViewerTranscriptClick);
   document.addEventListener('click',e=>{
     if(!$('viewerLayerCtl').contains(e.target))$('viewerLayerCtl').classList.remove('open');
-    if(!$('viewerActions').contains(e.target)&&e.target!==$('viewerMoreBtn'))$('viewerActions').hidden=true;
+    if(!$('viewerActions').contains(e.target)&&e.target!==$('viewerMoreBtn')&&e.target!==$('viewerPreviewMoreBtn'))$('viewerActions').hidden=true;
   });
 
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();state.installPrompt=e;$('installBtn').hidden=false;});
@@ -125,7 +124,7 @@ async function autoCrossVerify(){
   state.autoMatches=[];
   for(let ci=0;ci<captures.length;ci++){
     const cap=captures[ci];
-    const ranked=originals.map(o=>({o,score:bodyOverlapScore(cap.conv,o.conv)})).sort((a,b)=>b.score-a.score).slice(0,4).filter(x=>x.score>0);
+    const ranked=originals.filter(o=>!sameSourceProvenance(cap,o)).map(o=>({o,score:bodyOverlapScore(cap.conv,o.conv)})).sort((a,b)=>b.score-a.score).slice(0,4).filter(x=>x.score>0);
     let best=null;
     for(let i=0;i<ranked.length;i++){
       showProgress(true,`自動照合 ${ci+1}/${captures.length} · 候補 ${i+1}/${ranked.length}`,94);
@@ -137,7 +136,7 @@ async function autoCrossVerify(){
   }
   if(state.autoMatches.length){
     const best=state.autoMatches.slice().sort((a,b)=>b.quality-a.quality)[0];
-    state.comparison={aKey:best.a.key,bKey:best.b.key,result:best.result,auto:true};
+    state.comparison={aKey:best.a.key,bKey:best.b.key,result:best.result,auto:true,independent:true};
     $('compareA').value=best.a.key;$('compareB').value=best.b.key;$('inspectSelect').value=best.a.key;
     renderIntegrity();renderComparison();updateArchiveStatus();renderSources();
     toast(`本文から ${state.autoMatches.length} 件のキャプチャ候補を自動照合しました。`);
@@ -176,6 +175,30 @@ function updateSelectors(){
 }
 function getSelection(id){const v=$(id).value;if(!v)return null;const[si,ci]=v.split(':').map(Number);const source=state.sources[si],conv=source?.conversations?.[ci];return conv?{source,conv,report:source.integrity?.[ci],si,ci}:null;}
 
+function sameSourceProvenance(A,B){
+  if(!A||!B)return false;
+  if(A.key&&B.key&&A.key===B.key)return true;
+  if(Number.isInteger(A.si)&&Number.isInteger(B.si)&&A.si===B.si)return true;
+  if(A.source&&B.source&&A.source===B.source)return true;
+  const ah=A.source?.rawFileHash||A.rawFileHash||null,bh=B.source?.rawFileHash||B.rawFileHash||null;
+  return Boolean(ah&&bh&&ah===bh);
+}
+function comparisonIndependenceReason(A,B){
+  if(!A||!B)return '比較元が不足しています。';
+  if(A.si===B.si&&A.ci===B.ci)return '同じ会話を自分自身とは照合できません。';
+  if(A.si===B.si)return '同じ読み込み資料内の会話同士は独立資料として扱いません。';
+  const ah=A.source?.rawFileHash||null,bh=B.source?.rawFileHash||null;
+  if(ah&&bh&&ah===bh)return '同じ原本 SHA-256 を持つ資料は独立資料として扱いません。';
+  return '';
+}
+function storedArchiveStatus(a){
+  const status=a?.status||'UNVERIFIED';
+  if((status.startsWith('GRAPH VERIFIED')||status.startsWith('PATH VERIFIED'))&&!a?.verificationEvidence?.independent){
+    return a?.report?.errors?'INTERNAL FAIL':a?.report?'INTERNAL PASS · UNVERIFIED':'UNVERIFIED';
+  }
+  return status;
+}
+
 function renderIntegrity(){
   const sel=getSelection('inspectSelect'), sum=$('integritySummary'), issues=$('issueList');
   if(!sel){sum.className='integrity-summary empty-state';sum.textContent='会話を読み込むと検査結果が表示されます。';issues.className='issue-list empty-state';issues.textContent='エラー・警告の詳細';return;}
@@ -190,9 +213,16 @@ function renderIntegrity(){
 
 async function runCompare(){
   const A=getSelection('compareA'),B=getSelection('compareB');if(!A||!B){toast('比較する2つの会話を選択してください。');return;}
+  const reason=comparisonIndependenceReason(A,B);
+  if(reason){
+    state.comparison={aKey:$('compareA').value,bKey:$('compareB').value,result:null,independent:false,reason};
+    $('compareResult').className='compare-result';
+    $('compareResult').innerHTML=`<div class="compare-head"><strong class="result warn">SAME SOURCE · NOT VERIFIED</strong><span class="badge warn">NO CROSS-SOURCE</span></div><div class="diff-item">${escapeHtml(reason)}</div>`;
+    updateArchiveStatus();return;
+  }
   $('compareResult').className='empty-state';$('compareResult').textContent='照合中…';
   await new Promise(r=>requestAnimationFrame(()=>r()));
-  try{state.comparison={aKey:$('compareA').value,bKey:$('compareB').value,result:await compareConversations(A.conv,B.conv)};renderComparison();updateArchiveStatus();}
+  try{state.comparison={aKey:$('compareA').value,bKey:$('compareB').value,result:await compareConversations(A.conv,B.conv),independent:true};renderComparison();updateArchiveStatus();}
   catch(e){$('compareResult').textContent=`照合エラー: ${e.message}`;console.error(e);}
 }
 
@@ -209,7 +239,7 @@ function branchRows(label,arr){return arr.map(x=>`<div class="branch-item"><b>${
 function statusForSelection(sel,key=$('inspectSelect').value){
   if(!sel)return 'NO ARCHIVE';
   if(sel.report?.errors)return 'INTERNAL FAIL';
-  const cmp=(state.comparison && (state.comparison.aKey===key || state.comparison.bKey===key)) ? state.comparison.result : null;
+  const cmp=(state.comparison?.independent && (state.comparison.aKey===key || state.comparison.bKey===key)) ? state.comparison.result : null;
   if(cmp?.graphVerified)return 'GRAPH VERIFIED';
   if(cmp?.graphEquivalent)return 'GRAPH MATCH · AMBIGUOUS';
   if(cmp?.verified)return 'PATH VERIFIED';
@@ -234,6 +264,7 @@ async function saveLocal(){
       id,version:APP_VERSION,title:sel.conv.title||'(無題)',savedAt:old?.savedAt||now,updatedAt:now,
       status:statusForSelection(sel),graphHash:sel.report?.graphHash||null,
       source:{name:sel.source.name,kind:sel.source.kind,rawFileHash:sel.source.rawFileHash||null,rawSize:sel.source.rawSize||null},
+      verificationEvidence:(state.comparison?.independent&&(state.comparison.aKey===$('inspectSelect').value||state.comparison.bKey===$('inspectSelect').value)&&state.comparison.result)?{independent:true,aKey:state.comparison.aKey,bKey:state.comparison.bKey,label:state.comparison.result.label,graphVerified:Boolean(state.comparison.result.graphVerified),pathVerified:Boolean(state.comparison.result.verified),verifiedAt:now}:null,
       stats:sel.report?.stats||deriveStats(sel.conv),report:sel.report||null,conversation,
       originalOpfsPath:old?.originalOpfsPath||null,
     };
@@ -341,8 +372,8 @@ function renderLibrary(){
   list.className='library-list';
   list.innerHTML=items.map(a=>{
     const stats=a.stats||deriveStats(a.conversation||{});
-    const cls=statusClass(a.status);
-    return `<button class="library-card" data-open-archive="${escapeHtml(a.id)}"><div class="library-card-main"><strong>${escapeHtml(a.title||'(無題)')}</strong><small>${escapeHtml(a.source?.name||'Local Library')} · ${formatDate(a.updatedAt||a.savedAt)}</small><div class="source-meta"><span class="chip">${stats.user||0} user</span><span class="chip">${stats.assistant||0} assistant</span><span class="chip">${stats.branchPoints||0} branches</span></div></div><span class="badge ${cls}">${escapeHtml(shortStatus(a.status))}</span></button>`;
+    const effectiveStatus=storedArchiveStatus(a);const cls=statusClass(effectiveStatus);
+    return `<button class="library-card" data-open-archive="${escapeHtml(a.id)}"><div class="library-card-main"><strong>${escapeHtml(a.title||'(無題)')}</strong><small>${escapeHtml(a.source?.name||'Local Library')} · ${formatDate(a.updatedAt||a.savedAt)}</small><div class="source-meta"><span class="chip">${stats.user||0} user</span><span class="chip">${stats.assistant||0} assistant</span><span class="chip">${stats.branchPoints||0} branches</span></div></div><span class="badge ${cls}">${escapeHtml(shortStatus(effectiveStatus))}</span></button>`;
   }).join('');
 }
 
@@ -351,10 +382,9 @@ async function openArchive(id){
     const archive=await getArchive(id);if(!archive){toast('保存済み会話が見つかりません。');await loadLibrary();return;}
     state.viewerArchive=archive;
     state.viewerCurrentNode=archive.conversation?.currentNode||bestLeafFrom(archive.conversation,null);
-    state.viewerLayer='visual';state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerImageMetaVisible=true;
+    state.viewerLayer='visual';state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerImageMetaVisible=true;state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';
     $('viewerTitle').textContent=archive.title||'(無題)';
     $('viewerPreviewTitle').textContent=archive.title||'(無題)';
-    $('viewerStatus').textContent=archive.status||'UNVERIFIED';
     $('viewerUpdatedAt').textContent=formatDate(archive.updatedAt||archive.savedAt);
     $('viewerSearch').value='';$('viewerActions').hidden=true;$('viewerHistoryPanel').hidden=true;$('viewerOverviewPanel').hidden=true;
     $('viewerImagePromptsPanel').hidden=true;$('viewerImagePromptsBtn').textContent='▸ Image Prompts';
@@ -369,7 +399,7 @@ async function openArchive(id){
 function closeViewer(){
   closeViewerPreview(false);
   $('libraryViewer').hidden=true;document.body.classList.remove('viewer-open');
-  state.viewerArchive=null;state.viewerCurrentNode=null;state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];
+  state.viewerArchive=null;state.viewerCurrentNode=null;state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';
 }
 
 function renderViewerMeta(){
@@ -396,22 +426,62 @@ function toggleViewerOverview(){
 function applySavedViewerTheme(){
   let dark=false;try{dark=localStorage.getItem('ada-viewer-theme')==='dark';}catch{}
   $('libraryViewer').classList.toggle('dark-theme',dark);
+  syncViewerThemeControls();
 }
 function toggleViewerTheme(){
   const dark=!$('libraryViewer').classList.contains('dark-theme');
   $('libraryViewer').classList.toggle('dark-theme',dark);
   try{localStorage.setItem('ada-viewer-theme',dark?'dark':'light');}catch{}
+  syncViewerThemeControls();
 }
-
-function setViewerLayer(layer){
+function syncViewerThemeControls(){
+  const dark=$('libraryViewer').classList.contains('dark-theme');
+  for(const id of ['viewerThemeBtn','viewerPreviewThemeBtn']){
+    const b=$(id);if(!b)continue;
+    b.setAttribute('aria-label',dark?'ライトモードへ':'ダークモードへ');
+    b.title=dark?'ライトモードへ':'ダークモードへ';
+  }
+}
+function viewerLayerRoot(layer=state.viewerLayer){
+  return layer==='semantic'?$('viewerSemantic'):layer==='raw'?$('viewerRaw'):$('viewerTranscript');
+}
+function captureViewerReadingAnchor(layer=state.viewerLayer){
+  const scroller=$('libraryViewer'),root=viewerLayerRoot(layer);if(!scroller||!root)return null;
+  const header=$('libraryViewer').querySelector('.viewer-sticky-header');
+  const top=(header?.getBoundingClientRect().bottom||scroller.getBoundingClientRect().top)+4;
+  const bottom=scroller.getBoundingClientRect().bottom;
+  const nodes=[...root.querySelectorAll('[data-node-id]')];
+  let chosen=null;
+  for(const el of nodes){const r=el.getBoundingClientRect();if(r.bottom>top&&r.top<bottom){chosen=el;break;}}
+  if(!chosen)return {nodeId:null,ratio:0,scrollTop:scroller.scrollTop};
+  const r=chosen.getBoundingClientRect();
+  const ratio=Math.max(0,Math.min(1,(top-r.top)/Math.max(1,r.height)));
+  return {nodeId:chosen.dataset.nodeId||null,ratio,scrollTop:scroller.scrollTop};
+}
+function restoreViewerReadingAnchor(anchor,{behavior='auto'}={}){
+  if(!anchor)return;
+  const scroller=$('libraryViewer'),root=viewerLayerRoot();if(!scroller||!root)return;
+  if(!anchor.nodeId){scroller.scrollTo({top:anchor.scrollTop||0,behavior});return;}
+  const target=root.querySelector(`[data-node-id="${cssEscape(anchor.nodeId)}"]`);
+  if(!target){scroller.scrollTo({top:anchor.scrollTop||0,behavior});return;}
+  const header=$('libraryViewer').querySelector('.viewer-sticky-header');
+  const top=(header?.getBoundingClientRect().bottom||scroller.getBoundingClientRect().top)+4;
+  const r=target.getBoundingClientRect();
+  const delta=(r.top+(anchor.ratio||0)*Math.max(1,r.height))-top;
+  scroller.scrollTo({top:Math.max(0,scroller.scrollTop+delta),behavior});
+}
+function setViewerLayer(layer,{preservePosition=true}={}){
   if(!['visual','semantic','raw'].includes(layer))layer='visual';
+  const anchor=preservePosition?captureViewerReadingAnchor(state.viewerLayer):null;
+  clearViewerHighlights();
   state.viewerLayer=layer;
   $('viewerTranscript').hidden=layer!=='visual';$('viewerSemantic').hidden=layer!=='semantic';$('viewerRaw').hidden=layer!=='raw';
   const labels={visual:'Visual Replica',semantic:'Semantic Transcript',raw:'Raw Original'};
   $('viewerLayerLabel').textContent=labels[layer];
   document.querySelectorAll('[data-viewer-layer]').forEach(b=>{const check=b.querySelector('span');if(check)check.textContent=b.dataset.viewerLayer===layer?'✓':'';});
   $('viewerLayerCtl').classList.remove('open');
-  applyViewerSearch({jumpToFirst:false,resetIndex:true});
+  applyViewerSearch({resetIndex:true,showCurrent:false});
+  if(anchor)requestAnimationFrame(()=>restoreViewerReadingAnchor(anchor));
 }
 
 function renderViewerTranscript(){
@@ -435,15 +505,21 @@ function renderViewerTranscript(){
 function renderViewerSemantic(){
   const a=state.viewerArchive,box=$('viewerSemantic');if(!a)return;
   const conv=a.conversation||{},path=pathToNode(conv,state.viewerCurrentNode);
-  box.innerHTML=path.map(id=>conv.nodes?.[id]).filter(n=>n&&['user','assistant','system','tool'].includes(n.role)&&String(n.text||'').trim()).map(n=>`<section class="viewer-semantic-message"><div class="viewer-semantic-head">${escapeHtml(n.role==='assistant'?'ChatGPT':n.role==='user'?'User':n.role)}</div><pre>${escapeHtml(n.text||'')}</pre></section>`).join('')||'<div class="empty-state">Semantic Transcriptがありません。</div>';
+  box.innerHTML=path.map(id=>({id,n:conv.nodes?.[id]})).filter(x=>x.n&&['user','assistant','system','tool'].includes(x.n.role)&&String(x.n.text||'').trim()).map(({id,n})=>`<section class="viewer-semantic-message" data-node-id="${escapeHtml(id)}"><div class="viewer-semantic-head">${escapeHtml(n.role==='assistant'?'ChatGPT':n.role==='user'?'User':n.role)}</div><pre>${escapeHtml(n.text||'')}</pre></section>`).join('')||'<div class="empty-state">Semantic Transcriptがありません。</div>';
 }
 
 function renderViewerRaw(){
   const a=state.viewerArchive,box=$('viewerRaw');if(!a)return;
-  const raw=a.conversation?.rawOriginalText;
-  if(raw){box.innerHTML=`<pre class="viewer-raw-text">${escapeHtml(raw)}</pre>`;return;}
   const conv=a.conversation||{},path=pathToNode(conv,state.viewerCurrentNode);
-  box.innerHTML=path.map(id=>conv.nodes?.[id]).filter(Boolean).map(n=>`<section class="viewer-raw-message"><div>${escapeHtml(n.role||'unknown')} · ${escapeHtml(n.id||'')}</div><pre>${escapeHtml(n.text||'')}</pre></section>`).join('')||'<div class="empty-state">Raw Originalがありません。</div>';
+  const mapped=path.map(id=>({id,n:conv.nodes?.[id]})).filter(x=>x.n&&['user','assistant','system','tool'].includes(x.n.role)).map(({id,n})=>{
+    let body='';
+    if(n.raw!=null){try{body=typeof n.raw==='string'?n.raw:JSON.stringify(n.raw,null,2);}catch{body=String(n.raw);}}
+    if(!body)body=String(n.text||'');
+    return `<section class="viewer-raw-message" data-node-id="${escapeHtml(id)}"><div>${escapeHtml(n.role||'unknown')} · ${escapeHtml(n.id||id)}</div><pre>${escapeHtml(body)}</pre></section>`;
+  }).join('');
+  const raw=a.conversation?.rawOriginalText;
+  const full=raw?`<details class="viewer-raw-source"><summary>Full Raw Original</summary><pre class="viewer-raw-text">${escapeHtml(raw)}</pre></details>`:'';
+  box.innerHTML=full+(mapped||'<div class="empty-state">Raw Originalがありません。</div>');
 }
 
 function handleViewerTranscriptClick(e){
@@ -455,9 +531,7 @@ function handleViewerTranscriptClick(e){
   requestAnimationFrame(()=>document.querySelector(`[data-node-id="${cssEscape(b.dataset.branchChild)}"]`)?.scrollIntoView({block:'center'}));
 }
 
-function activeViewerSearchRoot(){
-  return state.viewerLayer==='semantic'?$('viewerSemantic'):state.viewerLayer==='raw'?$('viewerRaw'):$('viewerTranscript');
-}
+function activeViewerSearchRoot(){return viewerLayerRoot();}
 function clearViewerHighlights(){
   for(const root of [$('viewerTranscript'),$('viewerSemantic'),$('viewerRaw')]){
     root.querySelectorAll('mark.viewer-hit').forEach(m=>m.replaceWith(document.createTextNode(m.textContent)));
@@ -465,7 +539,21 @@ function clearViewerHighlights(){
   }
   state.viewerMatches=[];state.viewerMatchIndex=-1;
 }
-function applyViewerSearch({jumpToFirst=false,resetIndex=false}={}){
+function handleViewerSearchInput(){
+  const q=String($('viewerSearch').value||'').trim();
+  if(q&&!state.viewerLastSearchQuery)state.viewerSearchOrigin=captureViewerReadingAnchor();
+  if(!q){
+    const origin=state.viewerSearchOrigin;
+    clearViewerHighlights();
+    state.viewerLastSearchQuery='';state.viewerSearchOrigin=null;
+    $('viewerMatchCount').textContent='0 / 0';
+    if(origin)requestAnimationFrame(()=>restoreViewerReadingAnchor(origin));
+    return;
+  }
+  state.viewerLastSearchQuery=q;
+  applyViewerSearch({resetIndex:true,showCurrent:false});
+}
+function applyViewerSearch({jumpToFirst=false,resetIndex=false,showCurrent=false}={}){
   clearViewerHighlights();
   const q=String($('viewerSearch').value||'').trim();
   if(!q){$('viewerMatchCount').textContent='0 / 0';return;}
@@ -473,7 +561,7 @@ function applyViewerSearch({jumpToFirst=false,resetIndex=false}={}){
   const needle=q.toLocaleLowerCase('ja');
   const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode(node){
     if(!node.nodeValue)return NodeFilter.FILTER_REJECT;
-    if(node.parentElement?.closest('script,style,button,input,mark'))return NodeFilter.FILTER_REJECT;
+    if(node.parentElement?.closest('script,style,button,input,mark,summary'))return NodeFilter.FILTER_REJECT;
     return node.nodeValue.toLocaleLowerCase('ja').includes(needle)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;
   }});
   const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
@@ -484,37 +572,57 @@ function applyViewerSearch({jumpToFirst=false,resetIndex=false}={}){
     if(pos<raw.length)frag.append(document.createTextNode(raw.slice(pos)));node.replaceWith(frag);
   }
   if(!state.viewerMatches.length){$('viewerMatchCount').textContent='0 / 0';return;}
-  state.viewerMatchIndex=resetIndex||state.viewerMatchIndex<0||state.viewerMatchIndex>=state.viewerMatches.length?0:state.viewerMatchIndex;
-  focusViewerMatch(jumpToFirst);
+  if(resetIndex)state.viewerMatchIndex=-1;
+  else if(state.viewerMatchIndex>=state.viewerMatches.length)state.viewerMatchIndex=-1;
+  $('viewerMatchCount').textContent=state.viewerMatchIndex>=0?`${state.viewerMatchIndex+1} / ${state.viewerMatches.length}`:`0 / ${state.viewerMatches.length}`;
+  if(jumpToFirst){state.viewerMatchIndex=0;focusViewerMatch(true);}
+  else if(showCurrent&&state.viewerMatchIndex>=0)focusViewerMatch(false);
 }
 function moveViewerMatch(delta){
   const q=String($('viewerSearch').value||'').trim();if(!q)return;
-  if(!state.viewerMatches.length){applyViewerSearch({jumpToFirst:true,resetIndex:true});return;}
-  state.viewerMatchIndex=(state.viewerMatchIndex+delta+state.viewerMatches.length)%state.viewerMatches.length;
+  if(!state.viewerMatches.length)applyViewerSearch({resetIndex:true,showCurrent:false});
+  if(!state.viewerMatches.length)return;
+  if(state.viewerMatchIndex<0)state.viewerMatchIndex=delta<0?state.viewerMatches.length-1:0;
+  else state.viewerMatchIndex=(state.viewerMatchIndex+delta+state.viewerMatches.length)%state.viewerMatches.length;
   focusViewerMatch(true);
 }
 function focusViewerMatch(scroll){
   state.viewerMatches.forEach(m=>m.classList.remove('search-current'));
-  const mark=state.viewerMatches[state.viewerMatchIndex];if(!mark){$('viewerMatchCount').textContent='0 / 0';return;}
+  const mark=state.viewerMatches[state.viewerMatchIndex];if(!mark){$('viewerMatchCount').textContent=`0 / ${state.viewerMatches.length}`;return;}
   mark.classList.add('search-current');$('viewerMatchCount').textContent=`${state.viewerMatchIndex+1} / ${state.viewerMatches.length}`;
   if(scroll)requestAnimationFrame(()=>mark.scrollIntoView({behavior:'smooth',block:'center'}));
 }
 
+function isViewerContentImage(img){
+  if(!img)return false;
+  if(img.closest('.math-vector,.math-block,.math-boxed-vector,.archive-svg-math,.katex,.MathJax,mjx-container,[data-source-latex],[data-math],[data-latex]'))return false;
+  const signature=[img.getAttribute('class'),img.getAttribute('alt'),img.getAttribute('title'),img.getAttribute('role')].filter(Boolean).join(' ').toLowerCase();
+  if(/formula|equation|latex|math|数式|avatar|emoji|reaction|toolbar|icon\b/.test(signature))return false;
+  return true;
+}
 function collectViewerImages(){
   const a=state.viewerArchive;if(!a)return[];
   const conv=a.conversation||{},path=pathToNode(conv,state.viewerCurrentNode),out=[];
   const stored=Array.isArray(conv.previewImages)?conv.previewImages:[];
+  const usedStored=new Set();
   let lastUserText='';
+  const takeStored=id=>{
+    let rec=stored.find(x=>x?.nodeId===id&&!usedStored.has(x.index));
+    if(!rec)rec=stored.find(x=>!x?.nodeId&&!usedStored.has(x.index));
+    if(rec)usedStored.add(rec.index);
+    return rec||null;
+  };
   for(const id of path){
     const n=conv.nodes?.[id];if(!n)continue;
     if(n.role==='user'&&String(n.text||'').trim())lastUserText=String(n.text).trim();
     if(!n.richHtml)continue;
     const doc=new DOMParser().parseFromString(`<div id="r">${n.richHtml}</div>`,'text/html');
     for(const img of doc.querySelectorAll('#r img')){
+      if(!isViewerContentImage(img))continue;
       const src=img.getAttribute('src')||img.getAttribute('data-archiver-src')||'';
       if(!src)continue;
       const inline=/^(data:|blob:)/i.test(src);
-      const meta=stored.find(x=>x?.nodeId===id&&!out.some(o=>o.storedIndex===x.index))||stored[out.length]||null;
+      const meta=takeStored(id);
       const w=meta?.width||img.getAttribute('width')||img.getAttribute('data-width')||'';
       const h=meta?.height||img.getAttribute('height')||img.getAttribute('data-height')||'';
       const ownText=String(n.text||'').trim();
@@ -530,18 +638,37 @@ function imageSizeLabel(img){return img.width&&img.height?`${img.width} × ${img
 function renderViewerPreview(){
   const imgs=state.viewerImages||[];$('viewerImageCount').textContent=`${imgs.length} ${imgs.length===1?'image':'images'}`;
   $('viewerPreviewGrid').classList.toggle('hide-meta',!state.viewerImageMetaVisible);
-  $('viewerPreviewGrid').innerHTML=imgs.map(img=>`<button class="viewer-preview-item" data-preview-node="${escapeHtml(img.nodeId)}" data-preview-index="${img.index}"><span class="viewer-preview-number">${img.index}</span>${img.src?`<img src="${escapeHtml(img.src)}" alt="${escapeHtml(img.alt)}" data-preview-natural="${img.index}">`:`<span class="viewer-preview-placeholder">External image<br><small>tap transcript to access</small></span>`}<span class="viewer-preview-meta"><span class="viewer-preview-size" data-preview-size="${img.index}">${escapeHtml(imageSizeLabel(img))}</span><span class="viewer-preview-prompt">${escapeHtml(img.prompt)}</span></span></button>`).join('')||'<div class="empty-state">画像はありません。</div>';
+  $('viewerPreviewGrid').innerHTML=imgs.map(img=>`<article class="viewer-preview-item" data-preview-index="${img.index}"><button class="viewer-preview-number viewer-preview-jump" data-preview-jump="${escapeHtml(img.nodeId)}" aria-label="本文の画像 ${img.index} へ移動">${img.index}</button>${img.src?`<button class="viewer-preview-image-button" data-preview-open="${img.index}" aria-label="画像 ${img.index} を拡大"><img src="${escapeHtml(img.src)}" alt="${escapeHtml(img.alt)}" data-preview-natural="${img.index}"></button>`:`<span class="viewer-preview-placeholder">External image<br><small>本文から明示的に開けます</small></span>`}<span class="viewer-preview-meta"><span class="viewer-preview-size" data-preview-size="${img.index}">${escapeHtml(imageSizeLabel(img))}</span><span class="viewer-preview-prompt">${escapeHtml(img.prompt)}</span></span></article>`).join('')||'<div class="empty-state">画像はありません。</div>';
   $('viewerImagePromptsPanel').innerHTML=imgs.map(img=>`<div class="viewer-prompt-row"><span class="viewer-preview-number">${img.index}</span><span class="viewer-prompt-size" data-prompt-size="${img.index}">${escapeHtml(imageSizeLabel(img))}</span><span class="viewer-prompt-text">${escapeHtml(img.prompt)}</span></div>`).join('')||'<div class="empty-state">画像プロンプトはありません。</div>';
   $('viewerPreviewGrid').querySelectorAll('img[data-preview-natural]').forEach(el=>{
     const update=()=>{const i=Number(el.dataset.previewNatural),rec=imgs[i-1];if(!rec||!el.naturalWidth||!el.naturalHeight)return;rec.width=String(el.naturalWidth);rec.height=String(el.naturalHeight);const label=imageSizeLabel(rec);document.querySelectorAll(`[data-preview-size="${i}"],[data-prompt-size="${i}"]`).forEach(x=>x.textContent=label);};
     if(el.complete)update();else el.addEventListener('load',update,{once:true});
   });
 }
+function handleViewerPreviewClick(e){
+  const jump=e.target.closest('[data-preview-jump]');
+  if(jump){
+    const nodeId=jump.dataset.previewJump;if(!nodeId)return;
+    closeViewerPreview(false);setViewerLayer('visual',{preservePosition:false});
+    requestAnimationFrame(()=>document.querySelector(`[data-node-id="${cssEscape(nodeId)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}));
+    return;
+  }
+  const open=e.target.closest('[data-preview-open]');
+  if(open)openViewerImageLightbox(Number(open.dataset.previewOpen));
+}
+function openViewerImageLightbox(index){
+  const rec=(state.viewerImages||[])[index-1];if(!rec?.src)return;
+  $('viewerImageLightboxImg').src=rec.src;$('viewerImageLightboxImg').alt=rec.alt||`Image ${index}`;$('viewerImageLightbox').hidden=false;
+}
+function closeViewerImageLightbox(){
+  $('viewerImageLightbox').hidden=true;$('viewerImageLightboxImg').removeAttribute('src');
+}
 function openViewerPreview(){
   state.viewerTranscriptScrollTop=$('libraryViewer').scrollTop;
   $('viewerPreviewOverlay').hidden=false;$('viewerPreviewOverlay').scrollTop=0;
 }
 function closeViewerPreview(restore=true){
+  closeViewerImageLightbox();
   const overlay=$('viewerPreviewOverlay');if(!overlay)return;overlay.hidden=true;
   if(restore)requestAnimationFrame(()=>$('libraryViewer').scrollTo({top:state.viewerTranscriptScrollTop,behavior:'auto'}));
 }
@@ -596,7 +723,7 @@ async function loadViewerIntoWorkspace(){
 
 function exportViewerV15(){
   const a=state.viewerArchive;if(!a)return;
-  const html=buildV15Html(a.conversation,{status:a.status||'UNVERIFIED'});
+  const html=buildV15Html(a.conversation,{status:storedArchiveStatus(a)});
   downloadBlob(new Blob([html],{type:'text/html;charset=utf-8'}),`${sanitize(a.title||'conversation')}-v15.html`);
   toast('保存済み会話からv15 HTMLを生成しました。');
 }

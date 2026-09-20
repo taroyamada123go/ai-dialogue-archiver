@@ -137,14 +137,13 @@
     <div class="viewer-page">
       <header class="viewer-sticky-header">
         <div class="viewer-title-row">
-          <button id="viewerCloseBtn" class="viewer-back" aria-label="戻る">‹</button>
           <div class="viewer-heading">
             <strong id="viewerTitle">Conversation</strong>
-            <span id="viewerStatus">UNVERIFIED</span>
           </div>
           <div class="viewer-top-actions">
-            <button id="viewerThemeBtn" class="viewer-icon-button" aria-label="テーマ切替">◐</button>
-            <button id="viewerMoreBtn" class="viewer-icon-button" aria-label="操作">•••</button>
+            <button id="viewerThemeBtn" class="viewer-surface-icon viewer-theme-button" aria-label="テーマ切替"><span class="viewer-theme-dot" aria-hidden="true">●</span></button>
+            <button id="viewerMoreBtn" class="viewer-surface-icon" aria-label="操作">•••</button>
+            <button id="viewerCloseBtn" class="viewer-surface-icon viewer-back-icon" aria-label="戻る">‹</button>
           </div>
         </div>
 
@@ -196,10 +195,13 @@
       <div class="viewer-preview-page">
         <header class="viewer-preview-header">
           <div class="viewer-title-row">
-            <button id="viewerPreviewBackBtn" class="viewer-back" aria-label="Transcriptへ戻る">‹</button>
             <div class="viewer-heading">
               <strong id="viewerPreviewTitle">Conversation</strong>
-              <span>Preview</span>
+            </div>
+            <div class="viewer-top-actions">
+              <button id="viewerPreviewThemeBtn" class="viewer-surface-icon viewer-theme-button" aria-label="テーマ切替"><span class="viewer-theme-dot" aria-hidden="true">●</span></button>
+              <button id="viewerPreviewMoreBtn" class="viewer-surface-icon" aria-label="操作">•••</button>
+              <button id="viewerPreviewBackBtn" class="viewer-surface-icon viewer-back-icon" aria-label="Transcriptへ戻る">‹</button>
             </div>
           </div>
           <div class="viewer-preview-index-row">
@@ -213,6 +215,11 @@
         </header>
         <section id="viewerPreviewGrid" class="viewer-preview-grid"></section>
       </div>
+    </section>
+
+    <section id="viewerImageLightbox" class="viewer-image-lightbox" hidden aria-modal="true" role="dialog" aria-label="画像拡大表示">
+      <button id="viewerImageLightboxClose" class="viewer-lightbox-close" aria-label="画像を閉じる">×</button>
+      <img id="viewerImageLightboxImg" alt="">
     </section>
   </section>
 
