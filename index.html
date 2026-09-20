@@ -134,30 +134,86 @@
   <div id="toast" class="toast" hidden></div>
 
   <section id="libraryViewer" class="library-viewer" hidden aria-modal="true" role="dialog">
-    <header class="viewer-topbar">
-      <button id="viewerCloseBtn" class="viewer-back" aria-label="戻る">←</button>
-      <div class="viewer-title-wrap">
-        <strong id="viewerTitle">Conversation</strong>
-        <span id="viewerStatus">UNVERIFIED</span>
+    <div class="viewer-page">
+      <header class="viewer-sticky-header">
+        <div class="viewer-title-row">
+          <button id="viewerCloseBtn" class="viewer-back" aria-label="戻る">‹</button>
+          <div class="viewer-heading">
+            <strong id="viewerTitle">Conversation</strong>
+            <span id="viewerStatus">UNVERIFIED</span>
+          </div>
+          <div class="viewer-top-actions">
+            <button id="viewerThemeBtn" class="viewer-icon-button" aria-label="テーマ切替">◐</button>
+            <button id="viewerMoreBtn" class="viewer-icon-button" aria-label="操作">•••</button>
+          </div>
+        </div>
+
+        <div class="viewer-update-row">
+          <button id="viewerHistoryBtn" class="viewer-history-trigger"><strong>Last Updated:</strong> <span id="viewerUpdatedAt">—</span></button>
+        </div>
+
+        <div class="viewer-control-row">
+          <button id="viewerOverviewBtn" class="viewer-black-control viewer-overview-control">▸ Overview &amp; Key Concepts</button>
+          <span class="viewer-control-spacer"></span>
+          <div id="viewerLayerCtl" class="viewer-layer-control">
+            <button id="viewerLayerTrigger" class="viewer-black-control viewer-layer-trigger"><span class="viewer-layer-caret">▸</span><span id="viewerLayerLabel">Visual Replica</span></button>
+            <div id="viewerLayerMenu" class="viewer-layer-menu">
+              <button data-viewer-layer="visual">Visual Replica <span>✓</span></button>
+              <button data-viewer-layer="semantic">Semantic Transcript <span></span></button>
+              <button data-viewer-layer="raw">Raw Original <span></span></button>
+            </div>
+          </div>
+          <span id="viewerMatchCount" class="viewer-search-count">0 / 0</span>
+          <div class="viewer-search-box">
+            <input id="viewerSearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="この会話を検索">
+            <button id="viewerSearchGo" class="viewer-search-go" type="button" aria-label="次の検索結果">→</button>
+          </div>
+          <button id="viewerPreviewBtn" class="viewer-preview-button">Preview</button>
+        </div>
+
+        <div id="viewerHistoryPanel" class="viewer-header-panel viewer-history-panel" hidden></div>
+        <div id="viewerOverviewPanel" class="viewer-header-panel viewer-overview-panel" hidden></div>
+      </header>
+
+      <div id="viewerActions" class="viewer-actions" hidden>
+        <button id="viewerLoadBtn" class="ghost">検証画面へ読み込む</button>
+        <button id="viewerExportBtn" class="ghost">v15 HTML</button>
+        <button id="viewerDeleteBtn" class="danger-button">ライブラリから削除</button>
       </div>
-      <button id="viewerMoreBtn" class="ghost">操作</button>
-    </header>
-    <div id="viewerActions" class="viewer-actions" hidden>
-      <button id="viewerLoadBtn" class="ghost">検証画面へ読み込む</button>
-      <button id="viewerExportBtn" class="ghost">v15 HTML</button>
-      <button id="viewerDeleteBtn" class="danger-button">ライブラリから削除</button>
+
+      <div id="viewerMeta" class="viewer-meta"></div>
+      <main id="viewerTranscript" class="viewer-transcript viewer-layer-pane"></main>
+      <main id="viewerSemantic" class="viewer-semantic viewer-layer-pane" hidden></main>
+      <main id="viewerRaw" class="viewer-raw viewer-layer-pane" hidden></main>
     </div>
-    <div class="viewer-search-row">
-      <input id="viewerSearch" class="text-input" type="search" placeholder="この会話を検索" autocomplete="off">
-      <div class="viewer-search-nav" aria-label="検索結果を移動">
-        <button id="viewerPrevMatchBtn" class="ghost viewer-search-button" type="button" aria-label="前の検索結果">↑</button>
-        <button id="viewerNextMatchBtn" class="ghost viewer-search-button" type="button" aria-label="次の検索結果">↓</button>
-        <span id="viewerMatchCount" class="badge neutral">0</span>
+
+    <div class="viewer-edge-nav" aria-label="上下移動">
+      <button id="viewerTopBtn" aria-label="最上部へ">↑</button>
+      <button id="viewerBottomBtn" aria-label="最下部へ">↓</button>
+    </div>
+
+    <section id="viewerPreviewOverlay" class="viewer-preview-overlay" hidden aria-modal="true" role="dialog">
+      <div class="viewer-preview-page">
+        <header class="viewer-preview-header">
+          <div class="viewer-title-row">
+            <button id="viewerPreviewBackBtn" class="viewer-back" aria-label="Transcriptへ戻る">‹</button>
+            <div class="viewer-heading">
+              <strong id="viewerPreviewTitle">Conversation</strong>
+              <span>Preview</span>
+            </div>
+          </div>
+          <div class="viewer-preview-index-row">
+            <button id="viewerImageIndexBtn" class="viewer-image-index-trigger"><strong>Image Index:</strong> <span id="viewerImageCount">0 images</span></button>
+          </div>
+          <div class="viewer-preview-nav-row">
+            <button id="viewerImagePromptsBtn" class="viewer-black-control">▸ Image Prompts</button>
+            <button id="viewerTranscriptBtn" class="viewer-preview-button">Transcript</button>
+          </div>
+          <div id="viewerImagePromptsPanel" class="viewer-preview-prompts-panel" hidden></div>
+        </header>
+        <section id="viewerPreviewGrid" class="viewer-preview-grid"></section>
       </div>
-    </div>
-    <div id="viewerMeta" class="viewer-meta"></div>
-    <main id="viewerTranscript" class="viewer-transcript"></main>
-    <button id="viewerTopBtn" class="viewer-float" aria-label="最上部へ">↑</button>
+    </section>
   </section>
 
   <script src="vendor/jszip.min.js"></script>
