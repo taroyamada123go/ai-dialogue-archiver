@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#090a0c">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI Dialogue Archiver</title>
@@ -32,7 +34,7 @@
       </div>
       <div class="privacy-card">
         <span class="dot"></span>
-        <div><strong>端末内処理</strong><small>会話本文はこのブラウザ内で処理します。</small></div>
+        <div><strong>端末内処理</strong><small>会話本文はブラウザ内で処理。外部リソースは自動取得せず、タップした場合だけ外部へ移動します。</small></div>
       </div>
     </section>
 

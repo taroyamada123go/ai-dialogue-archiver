@@ -7,6 +7,7 @@ import {
   saveArchiveOriginalToOpfs, requestPersistentStorage
 } from './src/storage.js';
 import { buildV15Html } from './src/v15.js';
+import { protectFragmentForDisplay, externalUrlFromGate } from './src/network-policy.js';
 
 const state={
   mode:'quick',sources:[],comparison:null,autoMatches:[],installPrompt:null,
@@ -48,6 +49,12 @@ function setup(){
     state.viewerSearchTimer=setTimeout(renderViewerTranscript,100);
   });
   $('viewerTranscript').addEventListener('click',e=>{
+    const external=e.target.closest('[data-external-url]');
+    if(external){
+      const url=externalUrlFromGate(external);
+      if(url) window.open(url,'_blank','noopener,noreferrer');
+      return;
+    }
     const b=e.target.closest('[data-branch-child]');
     if(!b||!state.viewerArchive)return;
     state.viewerCurrentNode=bestLeafFrom(state.viewerArchive.conversation,b.dataset.branchChild);
@@ -429,19 +436,7 @@ async function deleteViewerArchive(){
 }
 
 function sanitizeForDisplay(html){
-  const doc=new DOMParser().parseFromString(`<div id="__safe_root">${html||''}</div>`,'text/html');
-  const root=doc.getElementById('__safe_root');if(!root)return '';
-  root.querySelectorAll('script,noscript,iframe,object,embed,foreignObject,form,input,textarea,select,button,link,meta,base').forEach(x=>x.remove());
-  for(const el of [root,...root.querySelectorAll('*')]){
-    for(const attr of [...(el.attributes||[])]){
-      const name=attr.name.toLowerCase(),value=String(attr.value||'').trim();
-      if(name.startsWith('on')||name==='srcdoc'||name==='formaction'||name==='autofocus')el.removeAttribute(attr.name);
-      else if((name==='href'||name==='src'||name==='xlink:href')&&/^javascript:/i.test(value))el.removeAttribute(attr.name);
-      else if(name==='style'&&/(expression\s*\(|url\s*\(\s*['"]?javascript:)/i.test(value))el.removeAttribute(attr.name);
-    }
-    if(el.tagName?.toLowerCase()==='a'){el.setAttribute('rel','noopener noreferrer');el.setAttribute('target','_blank');}
-  }
-  return root.innerHTML;
+  return protectFragmentForDisplay(html);
 }
 
 function deriveStats(conv){
