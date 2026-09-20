@@ -1,0 +1,15 @@
+[
+  {
+    "id":"different-id","title":"Branch test","create_time":1700000000,"current_node":"x5",
+    "mapping":{
+      "r":{"id":"r","parent":null,"children":["x1"],"message":{"id":"z0","author":{"role":"system"},"content":{"content_type":"text","parts":[""]}}},
+      "x1":{"id":"x1","parent":"r","children":["x2"],"message":{"id":"z1","author":{"role":"user"},"content":{"content_type":"text","parts":["こんにちは"]}}},
+      "x2":{"id":"x2","parent":"x1","children":["x3","y3"],"message":{"id":"z2","author":{"role":"assistant"},"content":{"content_type":"text","parts":["こんにちは。"]}}},
+      "x3":{"id":"x3","parent":"x2","children":["x4"],"message":{"id":"z3","author":{"role":"user"},"content":{"content_type":"text","parts":["Aについて説明して"]}}},
+      "x4":{"id":"x4","parent":"x3","children":["x5"],"message":{"id":"z4","author":{"role":"assistant"},"content":{"content_type":"text","parts":["Aの説明です"]}}},
+      "x5":{"id":"x5","parent":"x4","children":[],"message":{"id":"z5","author":{"role":"user"},"content":{"content_type":"text","parts":["ありがとう"]}}},
+      "y3":{"id":"y3","parent":"x2","children":["y4"],"message":{"id":"z6","author":{"role":"user"},"content":{"content_type":"text","parts":["Bについて説明して"]}}},
+      "y4":{"id":"y4","parent":"y3","children":[],"message":{"id":"z7","author":{"role":"assistant"},"content":{"content_type":"text","parts":["Bの説明です"]}}}
+    }
+  }
+]
