@@ -342,8 +342,22 @@ function messageFromElement(el) {
   if (!role) return null;
   const body = findBodyElement(el) || el;
   const text = cleanElementText(body, body===el);
-  if (!text) return null;
+  // Image-only / attachment-only messages are real conversation messages too.
+  // Older v15 archives often have no text in those messages, so dropping them
+  // also drops the only content image from Preview/Image Index.
+  if (!text && !hasMeaningfulMessageMedia(body)) return null;
   return {role, text, richHtml:sanitizeRichHtml(body), sourceTag:el.tagName?.toLowerCase() || ''};
+}
+
+function hasMeaningfulMessageMedia(root) {
+  for (const img of root.querySelectorAll?.('img') || []) {
+    const signature=[img.getAttribute('class'),img.getAttribute('alt'),img.getAttribute('title'),img.getAttribute('role')].filter(Boolean).join(' ').toLowerCase();
+    if (img.closest?.('.math-vector,.math-block,.math-boxed-vector,.archive-svg-math,.katex,.MathJax,mjx-container,[data-source-latex],[data-math],[data-latex]')) continue;
+    if (/formula|equation|latex|math|数式|avatar|emoji|reaction|toolbar|icon\b/.test(signature)) continue;
+    const src=img.getAttribute('src')||img.getAttribute('data-archiver-src')||'';
+    if (src) return true;
+  }
+  return Boolean(root.querySelector?.('video,audio,[data-attachment],.attachment,.message-image,.image-item'));
 }
 
 function roleFromElement(el) {
@@ -416,7 +430,10 @@ function dedupeConsecutive(items) {
   const out=[];
   for (const item of items) {
     const last=out[out.length-1];
-    if (last && last.role===item.role && normalizeText(last.text)===normalizeText(item.text)) continue;
+    const currentText=normalizeText(item.text);
+    const lastText=last?normalizeText(last.text):'';
+    // Never collapse media-only messages merely because both have empty text.
+    if (last && currentText && lastText && last.role===item.role && lastText===currentText) continue;
     out.push(item);
   }
   return out;
