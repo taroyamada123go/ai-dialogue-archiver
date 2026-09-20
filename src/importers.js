@@ -136,6 +136,7 @@ async function importHtmlFile(file) {
   conversation.visualHtml = visualHtml;
   conversation.rawOriginalText = rawOriginalText;
   conversation.htmlFlavor = htmlFlavor;
+  conversation.previewImages = extractPreviewMetadata(doc);
 
   return {
     id: stableId('source'), kind:'html-capture', name:file.name, importedAt:new Date().toISOString(),
@@ -143,6 +144,33 @@ async function importHtmlFile(file) {
     entryNames:[file.name], conversations:[conversation], htmlRaw:html,
     htmlFlavor, sourceFile:file,
   };
+}
+
+function extractPreviewMetadata(doc) {
+  const thumbs=[...doc.querySelectorAll('.preview-item, [data-preview-item]')];
+  const prompts=[...doc.querySelectorAll('.preview-prompt-item, [data-preview-prompt]')];
+  if(!thumbs.length && !prompts.length)return [];
+  const promptByNumber=new Map();
+  prompts.forEach((row,i)=>{
+    const n=normalizeText(row.querySelector('.preview-number,.image-index-number,[data-preview-number]')?.textContent||String(i+1));
+    const text=normalizeText(row.querySelector('.preview-prompt-text,[data-preview-prompt-text]')?.textContent||row.getAttribute('data-copy-text')||'');
+    promptByNumber.set(n||String(i+1),text);
+  });
+  return thumbs.map((item,i)=>{
+    const number=normalizeText(item.querySelector('.preview-number,.preview-number-overlay,[data-preview-number]')?.textContent||String(i+1))||String(i+1);
+    const link=item.querySelector('a[href^="#"]');
+    const img=item.querySelector('img');
+    const href=link?.getAttribute('href')||'';
+    return {
+      index:i+1,
+      number,
+      nodeId:href.startsWith('#')?href.slice(1):null,
+      prompt:promptByNumber.get(number)||'',
+      alt:img?.getAttribute('alt')||'',
+      width:img?.getAttribute('width')||'',
+      height:img?.getAttribute('height')||'',
+    };
+  });
 }
 
 function findConversationObjects(parsed) {
