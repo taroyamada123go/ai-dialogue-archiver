@@ -1,0 +1,12 @@
+import { File } from 'node:buffer';
+import { createRequire } from 'node:module';
+import fs from 'node:fs/promises';
+import { importFiles } from '../src/importers.js';
+const require=createRequire(import.meta.url);
+globalThis.JSZip=require('/opt/nvm/versions/node/v22.16.0/lib/node_modules/pptxgenjs/node_modules/jszip');
+const txt=await fs.readFile(new URL('../samples/sample-export-a.json',import.meta.url),'utf8');
+const z=new JSZip(); z.file('conversations.json',txt); z.file('assets/example.txt','x');
+const bytes=await z.generateAsync({type:'uint8array'});
+const [s]=await importFiles([new File([bytes],'export.zip',{type:'application/zip'})]);
+if(s.conversations.length!==1)throw new Error('zip parse failed');
+console.log({kind:s.kind,conversations:s.conversations.length,entries:s.entryNames.length});

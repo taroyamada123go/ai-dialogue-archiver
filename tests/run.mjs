@@ -1,0 +1,13 @@
+import { File } from 'node:buffer';
+import fs from 'node:fs/promises';
+import { importFiles } from '../src/importers.js';
+import { compareConversations } from '../src/compare.js';
+const aTxt=await fs.readFile(new URL('../samples/sample-export-a.json',import.meta.url),'utf8');
+const bTxt=await fs.readFile(new URL('../samples/sample-export-b.json',import.meta.url),'utf8');
+const [a]=await importFiles([new File([aTxt],'a.json',{type:'application/json'})]);
+const [b]=await importFiles([new File([bTxt],'b.json',{type:'application/json'})]);
+if(a.conversations.length!==1) throw new Error('A parse failed');
+const cmp=await compareConversations(a.conversations[0],b.conversations[0]);
+if(!cmp.graphEquivalent) throw new Error('Graph equivalence should ignore IDs');
+if(!cmp.verified) throw new Error('Current path should match');
+console.log(JSON.stringify({nodes:Object.keys(a.conversations[0].nodes).length,graphEquivalent:cmp.graphEquivalent,label:cmp.label},null,2));

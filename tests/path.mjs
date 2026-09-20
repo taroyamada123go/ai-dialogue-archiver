@@ -1,0 +1,14 @@
+import { File } from 'node:buffer';
+import fs from 'node:fs/promises';
+import { importFiles } from '../src/importers.js';
+import { compareConversations } from '../src/compare.js';
+const txt=await fs.readFile(new URL('../samples/sample-export-a.json',import.meta.url),'utf8');
+const [s]=await importFiles([new File([txt],'a.json')]);
+const a=s.conversations[0];
+const ids=['a1','a2','a3','a4','a5'];
+const nodes={}; ids.forEach((id,i)=>{const n=structuredClone(a.nodes[id]);n.id='h'+i;n.parent=i?`h${i-1}`:null;n.children=i<ids.length-1?[`h${i+1}`]:[];nodes[n.id]=n;});
+const h={id:null,title:'capture',currentNode:'h4',nodes};
+const c=await compareConversations(a,h);
+if(c.graphEquivalent) throw new Error('branched export must not graph-match linear capture');
+if(!c.verified) throw new Error('active path should verify against linear capture');
+console.log({graphEquivalent:c.graphEquivalent,verified:c.verified,label:c.label,agreement:c.sequenceAgreement});
