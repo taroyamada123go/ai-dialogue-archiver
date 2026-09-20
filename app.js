@@ -11,7 +11,7 @@ import { protectFragmentForDisplay, externalUrlFromGate } from './src/network-po
 
 const state={
   mode:'quick',sources:[],comparison:null,autoMatches:[],installPrompt:null,
-  library:[],viewerArchive:null,viewerCurrentNode:null,viewerLayer:'visual',viewerMatches:[],viewerMatchIndex:-1,viewerImages:[],viewerImageMetaVisible:true,viewerTranscriptScrollTop:0,viewerSearchOrigin:null,viewerLastSearchQuery:'',
+  library:[],viewerArchive:null,viewerCurrentNode:null,viewerLayer:'visual',viewerMatches:[],viewerMatchIndex:-1,viewerImages:[],viewerImageMetaVisible:true,viewerTranscriptScrollTop:0,viewerSearchOrigin:null,viewerLastSearchQuery:'',viewerSearchSnapshots:null,
 };
 const $=id=>document.getElementById(id);
 
@@ -382,7 +382,7 @@ async function openArchive(id){
     const archive=await getArchive(id);if(!archive){toast('保存済み会話が見つかりません。');await loadLibrary();return;}
     state.viewerArchive=archive;
     state.viewerCurrentNode=archive.conversation?.currentNode||bestLeafFrom(archive.conversation,null);
-    state.viewerLayer='visual';state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerImageMetaVisible=true;state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';
+    state.viewerLayer='visual';state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerImageMetaVisible=true;state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';state.viewerSearchSnapshots=null;
     $('viewerTitle').textContent=archive.title||'(無題)';
     $('viewerPreviewTitle').textContent=archive.title||'(無題)';
     $('viewerUpdatedAt').textContent=formatDate(archive.updatedAt||archive.savedAt);
@@ -399,7 +399,7 @@ async function openArchive(id){
 function closeViewer(){
   closeViewerPreview(false);
   $('libraryViewer').hidden=true;document.body.classList.remove('viewer-open');
-  state.viewerArchive=null;state.viewerCurrentNode=null;state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';
+  state.viewerArchive=null;state.viewerCurrentNode=null;state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';state.viewerSearchSnapshots=null;
 }
 
 function renderViewerMeta(){
@@ -451,25 +451,33 @@ function captureViewerReadingAnchor(layer=state.viewerLayer){
   const top=(header?.getBoundingClientRect().bottom||scroller.getBoundingClientRect().top)+4;
   const bottom=scroller.getBoundingClientRect().bottom;
   const nodes=[...root.querySelectorAll('[data-node-id]')];
-  let chosen=null;
-  for(const el of nodes){const r=el.getBoundingClientRect();if(r.bottom>top&&r.top<bottom){chosen=el;break;}}
-  if(!chosen)return {nodeId:null,ratio:0,scrollTop:scroller.scrollTop};
+  let chosen=null,chosenIndex=-1;
+  for(let i=0;i<nodes.length;i++){
+    const el=nodes[i],r=el.getBoundingClientRect();
+    if(r.bottom>top&&r.top<bottom){chosen=el;chosenIndex=i;break;}
+  }
+  if(!chosen)return {nodeId:null,nodeIndex:-1,messageFraction:0,scrollTop:scroller.scrollTop};
   const r=chosen.getBoundingClientRect();
-  const ratio=Math.max(0,Math.min(1,(top-r.top)/Math.max(1,r.height)));
-  return {nodeId:chosen.dataset.nodeId||null,ratio,scrollTop:scroller.scrollTop};
+  const messageFraction=Math.max(0,Math.min(1,(top-r.top)/Math.max(1,r.height)));
+  return {nodeId:chosen.dataset.nodeId||null,nodeIndex:chosenIndex,messageFraction,scrollTop:scroller.scrollTop};
 }
 function restoreViewerReadingAnchor(anchor,{behavior='auto'}={}){
   if(!anchor)return;
   const scroller=$('libraryViewer'),root=viewerLayerRoot();if(!scroller||!root)return;
   if(!anchor.nodeId){scroller.scrollTo({top:anchor.scrollTop||0,behavior});return;}
-  const target=root.querySelector(`[data-node-id="${cssEscape(anchor.nodeId)}"]`);
+  let target=root.querySelector(`[data-node-id="${cssEscape(anchor.nodeId)}"]`);
+  if(!target&&Number.isInteger(anchor.nodeIndex)&&anchor.nodeIndex>=0){
+    target=root.querySelectorAll('[data-node-id]')[anchor.nodeIndex]||null;
+  }
   if(!target){scroller.scrollTo({top:anchor.scrollTop||0,behavior});return;}
   const header=$('libraryViewer').querySelector('.viewer-sticky-header');
   const top=(header?.getBoundingClientRect().bottom||scroller.getBoundingClientRect().top)+4;
   const r=target.getBoundingClientRect();
-  const delta=(r.top+(anchor.ratio||0)*Math.max(1,r.height))-top;
+  const fraction=Number.isFinite(anchor.messageFraction)?anchor.messageFraction:(anchor.ratio||0);
+  const delta=(r.top+fraction*Math.max(1,r.height))-top;
   scroller.scrollTo({top:Math.max(0,scroller.scrollTop+delta),behavior});
 }
+
 function setViewerLayer(layer,{preservePosition=true}={}){
   if(!['visual','semantic','raw'].includes(layer))layer='visual';
   const anchor=preservePosition?captureViewerReadingAnchor(state.viewerLayer):null;
@@ -505,7 +513,10 @@ function renderViewerTranscript(){
 function renderViewerSemantic(){
   const a=state.viewerArchive,box=$('viewerSemantic');if(!a)return;
   const conv=a.conversation||{},path=pathToNode(conv,state.viewerCurrentNode);
-  box.innerHTML=path.map(id=>({id,n:conv.nodes?.[id]})).filter(x=>x.n&&['user','assistant','system','tool'].includes(x.n.role)&&String(x.n.text||'').trim()).map(({id,n})=>`<section class="viewer-semantic-message" data-node-id="${escapeHtml(id)}"><div class="viewer-semantic-head">${escapeHtml(n.role==='assistant'?'ChatGPT':n.role==='user'?'User':n.role)}</div><pre>${escapeHtml(n.text||'')}</pre></section>`).join('')||'<div class="empty-state">Semantic Transcriptがありません。</div>';
+  box.innerHTML=path.map(id=>({id,n:conv.nodes?.[id]})).filter(x=>x.n&&['user','assistant','system','tool'].includes(x.n.role)&&(String(x.n.text||'').trim()||x.n.richHtml)).map(({id,n})=>{
+    const text=String(n.text||'').trim()||'[Image / attachment]';
+    return `<section class="viewer-semantic-message" data-node-id="${escapeHtml(id)}"><div class="viewer-semantic-head">${escapeHtml(n.role==='assistant'?'ChatGPT':n.role==='user'?'User':n.role)}</div><pre>${escapeHtml(text)}</pre></section>`;
+  }).join('')||'<div class="empty-state">Semantic Transcriptがありません。</div>';
 }
 
 function renderViewerRaw(){
@@ -526,26 +537,60 @@ function handleViewerTranscriptClick(e){
   const external=e.target.closest('[data-external-url]');
   if(external){const url=externalUrlFromGate(external);if(url)window.open(url,'_blank','noopener,noreferrer');return;}
   const b=e.target.closest('[data-branch-child]');if(!b||!state.viewerArchive)return;
+  const activeQuery=String($('viewerSearch').value||'');
+  if(activeQuery){
+    restoreViewerSearchSnapshots();
+    state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';state.viewerMatches=[];state.viewerMatchIndex=-1;
+    $('viewerSearch').value='';
+  }
   state.viewerCurrentNode=bestLeafFrom(state.viewerArchive.conversation,b.dataset.branchChild);
   renderViewerTranscript();renderViewerSemantic();renderViewerRaw();
+  if(activeQuery){
+    $('viewerSearch').value=activeQuery;
+    state.viewerSearchOrigin=captureViewerReadingAnchor();
+    captureViewerSearchSnapshots();
+    state.viewerLastSearchQuery=activeQuery.trim();
+    applyViewerSearch({resetIndex:true,showCurrent:false});
+  }
   requestAnimationFrame(()=>document.querySelector(`[data-node-id="${cssEscape(b.dataset.branchChild)}"]`)?.scrollIntoView({block:'center'}));
 }
 
 function activeViewerSearchRoot(){return viewerLayerRoot();}
+function captureViewerSearchSnapshots(){
+  if(state.viewerSearchSnapshots)return;
+  state.viewerSearchSnapshots={
+    visual:$('viewerTranscript').innerHTML,
+    semantic:$('viewerSemantic').innerHTML,
+    raw:$('viewerRaw').innerHTML,
+  };
+}
+function restoreViewerSearchSnapshots({keep=false}={}){
+  const snap=state.viewerSearchSnapshots;if(!snap)return false;
+  $('viewerTranscript').innerHTML=snap.visual;
+  $('viewerSemantic').innerHTML=snap.semantic;
+  $('viewerRaw').innerHTML=snap.raw;
+  state.viewerMatches=[];state.viewerMatchIndex=-1;
+  if(!keep)state.viewerSearchSnapshots=null;
+  return true;
+}
 function clearViewerHighlights(){
+  if(restoreViewerSearchSnapshots({keep:true}))return;
   for(const root of [$('viewerTranscript'),$('viewerSemantic'),$('viewerRaw')]){
     root.querySelectorAll('mark.viewer-hit').forEach(m=>m.replaceWith(document.createTextNode(m.textContent)));
-    root.normalize();root.querySelectorAll('.search-match-current').forEach(x=>x.classList.remove('search-match-current'));
+    root.normalize();root.querySelectorAll('.search-current,.search-match-current').forEach(x=>x.classList.remove('search-current','search-match-current'));
   }
   state.viewerMatches=[];state.viewerMatchIndex=-1;
 }
 function handleViewerSearchInput(){
   const q=String($('viewerSearch').value||'').trim();
-  if(q&&!state.viewerLastSearchQuery)state.viewerSearchOrigin=captureViewerReadingAnchor();
+  if(q&&!state.viewerLastSearchQuery){
+    state.viewerSearchOrigin=captureViewerReadingAnchor();
+    captureViewerSearchSnapshots();
+  }
   if(!q){
     const origin=state.viewerSearchOrigin;
-    clearViewerHighlights();
-    state.viewerLastSearchQuery='';state.viewerSearchOrigin=null;
+    restoreViewerSearchSnapshots();
+    state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerLastSearchQuery='';state.viewerSearchOrigin=null;
     $('viewerMatchCount').textContent='0 / 0';
     if(origin)requestAnimationFrame(()=>restoreViewerReadingAnchor(origin));
     return;
@@ -554,9 +599,10 @@ function handleViewerSearchInput(){
   applyViewerSearch({resetIndex:true,showCurrent:false});
 }
 function applyViewerSearch({jumpToFirst=false,resetIndex=false,showCurrent=false}={}){
-  clearViewerHighlights();
   const q=String($('viewerSearch').value||'').trim();
   if(!q){$('viewerMatchCount').textContent='0 / 0';return;}
+  captureViewerSearchSnapshots();
+  restoreViewerSearchSnapshots({keep:true});
   const root=activeViewerSearchRoot();
   const needle=q.toLocaleLowerCase('ja');
   const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode(node){
@@ -571,7 +617,7 @@ function applyViewerSearch({jumpToFirst=false,resetIndex=false,showCurrent=false
     while(at>=0){if(at>pos)frag.append(document.createTextNode(raw.slice(pos,at)));const mark=document.createElement('mark');mark.className='viewer-hit';mark.textContent=raw.slice(at,at+q.length);frag.append(mark);state.viewerMatches.push(mark);pos=at+q.length;at=low.indexOf(needle,pos);}
     if(pos<raw.length)frag.append(document.createTextNode(raw.slice(pos)));node.replaceWith(frag);
   }
-  if(!state.viewerMatches.length){$('viewerMatchCount').textContent='0 / 0';return;}
+  if(!state.viewerMatches.length){state.viewerMatchIndex=-1;$('viewerMatchCount').textContent='0 / 0';return;}
   if(resetIndex)state.viewerMatchIndex=-1;
   else if(state.viewerMatchIndex>=state.viewerMatches.length)state.viewerMatchIndex=-1;
   $('viewerMatchCount').textContent=state.viewerMatchIndex>=0?`${state.viewerMatchIndex+1} / ${state.viewerMatches.length}`:`0 / ${state.viewerMatches.length}`;
@@ -598,8 +644,14 @@ function isViewerContentImage(img){
   if(img.closest('.math-vector,.math-block,.math-boxed-vector,.archive-svg-math,.katex,.MathJax,mjx-container,[data-source-latex],[data-math],[data-latex]'))return false;
   const signature=[img.getAttribute('class'),img.getAttribute('alt'),img.getAttribute('title'),img.getAttribute('role')].filter(Boolean).join(' ').toLowerCase();
   if(/formula|equation|latex|math|数式|avatar|emoji|reaction|toolbar|icon\b/.test(signature))return false;
+  // Explicit conversation-media wrappers/labels take priority over generic size heuristics.
+  if(img.closest('.message-image,.image-item,.attachment,[data-attachment]')||/添付画像|generated image|image attachment/.test(signature))return true;
+  const w=Number(img.getAttribute('width')||img.getAttribute('data-width')||0);
+  const h=Number(img.getAttribute('height')||img.getAttribute('data-height')||0);
+  if(w>0&&h>0&&w<=64&&h<=64)return false;
   return true;
 }
+
 function collectViewerImages(){
   const a=state.viewerArchive;if(!a)return[];
   const conv=a.conversation||{},path=pathToNode(conv,state.viewerCurrentNode),out=[];
