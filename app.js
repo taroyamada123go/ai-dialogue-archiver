@@ -11,7 +11,7 @@ import { protectFragmentForDisplay, externalUrlFromGate } from './src/network-po
 
 const state={
   mode:'quick',sources:[],comparison:null,autoMatches:[],installPrompt:null,
-  library:[],viewerArchive:null,viewerCurrentNode:null,viewerSearchTimer:null,
+  library:[],viewerArchive:null,viewerCurrentNode:null,viewerSearchTimer:null,viewerMatches:[],viewerMatchIndex:-1,
 };
 const $=id=>document.getElementById(id);
 
@@ -46,8 +46,11 @@ function setup(){
   $('viewerTopBtn').addEventListener('click',()=>{$('libraryViewer').scrollTo({top:0,behavior:'smooth'});});
   $('viewerSearch').addEventListener('input',()=>{
     clearTimeout(state.viewerSearchTimer);
-    state.viewerSearchTimer=setTimeout(renderViewerTranscript,100);
+    state.viewerMatchIndex=-1;
+    state.viewerSearchTimer=setTimeout(()=>renderViewerTranscript({jumpToFirst:true}),100);
   });
+  $('viewerPrevMatchBtn').addEventListener('click',()=>moveViewerMatch(-1));
+  $('viewerNextMatchBtn').addEventListener('click',()=>moveViewerMatch(1));
   $('viewerTranscript').addEventListener('click',e=>{
     const external=e.target.closest('[data-external-url]');
     if(external){
@@ -341,7 +344,7 @@ async function openArchive(id){
     state.viewerCurrentNode=archive.conversation?.currentNode||bestLeafFrom(archive.conversation,null);
     $('viewerTitle').textContent=archive.title||'(無題)';
     $('viewerStatus').textContent=archive.status||'UNVERIFIED';
-    $('viewerSearch').value='';$('viewerActions').hidden=true;
+    $('viewerSearch').value='';state.viewerMatches=[];state.viewerMatchIndex=-1;$('viewerActions').hidden=true;
     $('libraryViewer').hidden=false;document.body.classList.add('viewer-open');
     $('libraryViewer').scrollTop=0;
     renderViewerMeta();renderViewerTranscript();
@@ -350,7 +353,7 @@ async function openArchive(id){
 
 function closeViewer(){
   $('libraryViewer').hidden=true;document.body.classList.remove('viewer-open');
-  state.viewerArchive=null;state.viewerCurrentNode=null;
+  state.viewerArchive=null;state.viewerCurrentNode=null;state.viewerMatches=[];state.viewerMatchIndex=-1;
 }
 
 function renderViewerMeta(){
@@ -359,27 +362,92 @@ function renderViewerMeta(){
   $('viewerMeta').innerHTML=`<span>${s.user||0} User</span><span>${s.assistant||0} ChatGPT</span><span>${s.branchPoints||0} Branches</span><span>${formatDate(a.updatedAt||a.savedAt)}</span>${a.graphHash?`<span class="viewer-hash">${escapeHtml(a.graphHash.slice(0,16))}…</span>`:''}`;
 }
 
-function renderViewerTranscript(){
+function renderViewerTranscript({jumpToFirst=false}={}){
   const a=state.viewerArchive,box=$('viewerTranscript');if(!a)return;
   const conv=a.conversation||{},path=pathToNode(conv,state.viewerCurrentNode);
-  const q=($('viewerSearch').value||'').trim().toLowerCase();
-  let matched=0,rendered=0;
+  const q=($('viewerSearch').value||'').trim();
+  const qFold=foldSearch(q);
   const html=[];
+  const matches=[];
+  let rendered=0;
   for(let i=0;i<path.length;i++){
     const id=path[i],n=conv.nodes?.[id];if(!n||!['user','assistant','system','tool'].includes(n.role))continue;
     if(!String(n.text||'').trim()&&!n.richHtml)continue;
-    const isMatch=!q||String(n.text||'').toLowerCase().includes(q);
-    if(q&&!isMatch)continue;
-    matched++;rendered++;
+    rendered++;
+    const isMatch=Boolean(qFold)&&foldSearch(String(n.text||'')).includes(qFold);
+    if(isMatch)matches.push(id);
     const role=n.role==='user'?'User':n.role==='assistant'?'ChatGPT':n.role;
     const rich=n.richHtml?sanitizeForDisplay(n.richHtml):escapeHtml(n.text||'').replace(/\n/g,'<br>');
     const children=(n.children||[]).filter(cid=>conv.nodes?.[cid]);
     const activeNext=path[i+1]||null;
     const branch=children.length>1?`<div class="viewer-branches"><span>分岐 ${children.length}</span>${children.map((cid,idx)=>{const child=conv.nodes[cid];const label=branchLabel(child,idx);return `<button class="branch-choice ${cid===activeNext?'active':''}" data-branch-child="${escapeHtml(cid)}">${escapeHtml(label)}</button>`;}).join('')}</div>`:'';
-    html.push(`<article class="viewer-message ${escapeHtml(n.role)}" data-node-id="${escapeHtml(id)}"><div class="viewer-role">${escapeHtml(role)}</div><div class="viewer-body">${rich}</div>${branch}</article>`);
+    html.push(`<article class="viewer-message ${escapeHtml(n.role)}${isMatch?' search-match':''}" data-node-id="${escapeHtml(id)}"><div class="viewer-role">${escapeHtml(role)}</div><div class="viewer-body">${rich}</div>${branch}</article>`);
   }
-  $('viewerMatchCount').textContent=q?`${matched}件`:`${rendered}件`;
-  box.innerHTML=html.join('')||'<div class="empty-state">一致する本文がありません。</div>';
+  box.innerHTML=html.join('')||'<div class="empty-state">本文がありません。</div>';
+  state.viewerMatches=matches;
+  if(!q){
+    state.viewerMatchIndex=-1;
+    $('viewerMatchCount').textContent=`${rendered}件`;
+    setSearchNavDisabled(true);
+    return;
+  }
+  $('viewerMatchCount').textContent=`${matches.length}件`;
+  setSearchNavDisabled(matches.length===0);
+  if(matches.length===0){state.viewerMatchIndex=-1;return;}
+  for(const id of matches){
+    const article=box.querySelector(`[data-node-id="${cssEscape(id)}"]`);
+    if(article) highlightText(article.querySelector('.viewer-body'),q);
+  }
+  if(state.viewerMatchIndex<0||state.viewerMatchIndex>=matches.length)state.viewerMatchIndex=0;
+  applyViewerMatchFocus(jumpToFirst);
+}
+
+function foldSearch(text){return String(text||'').normalize('NFKC').toLocaleLowerCase('ja');}
+
+function highlightText(root,query){
+  if(!root||!query)return;
+  const qFold=foldSearch(query);if(!qFold)return;
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode(node){
+    if(!node.nodeValue?.trim())return NodeFilter.FILTER_REJECT;
+    if(node.parentElement?.closest('script,style,mark'))return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;
+  }});
+  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  for(const node of nodes){
+    const raw=node.nodeValue,fold=foldSearch(raw);let pos=0,idx=fold.indexOf(qFold,pos);
+    if(idx<0)continue;
+    const frag=document.createDocumentFragment();
+    while(idx>=0){
+      if(idx>pos)frag.append(document.createTextNode(raw.slice(pos,idx)));
+      const mark=document.createElement('mark');mark.className='viewer-hit';mark.textContent=raw.slice(idx,idx+query.length);frag.append(mark);
+      pos=idx+query.length;idx=fold.indexOf(qFold,pos);
+    }
+    if(pos<raw.length)frag.append(document.createTextNode(raw.slice(pos)));
+    node.replaceWith(frag);
+  }
+}
+
+function setSearchNavDisabled(disabled){
+  $('viewerPrevMatchBtn').disabled=disabled;
+  $('viewerNextMatchBtn').disabled=disabled;
+}
+
+function moveViewerMatch(delta){
+  if(!state.viewerMatches.length)return;
+  const len=state.viewerMatches.length;
+  state.viewerMatchIndex=(state.viewerMatchIndex+delta+len)%len;
+  applyViewerMatchFocus(true);
+}
+
+function applyViewerMatchFocus(scroll){
+  const box=$('viewerTranscript');
+  box.querySelectorAll('.search-match-current').forEach(el=>el.classList.remove('search-match-current'));
+  if(state.viewerMatchIndex<0||!state.viewerMatches.length)return;
+  const id=state.viewerMatches[state.viewerMatchIndex];
+  const article=box.querySelector(`[data-node-id="${cssEscape(id)}"]`);if(!article)return;
+  article.classList.add('search-match-current');
+  $('viewerMatchCount').textContent=`${state.viewerMatchIndex+1}/${state.viewerMatches.length}`;
+  if(scroll)requestAnimationFrame(()=>article.scrollIntoView({behavior:'smooth',block:'center'}));
 }
 
 function pathToNode(conv,target){

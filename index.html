@@ -149,7 +149,11 @@
     </div>
     <div class="viewer-search-row">
       <input id="viewerSearch" class="text-input" type="search" placeholder="この会話を検索" autocomplete="off">
-      <span id="viewerMatchCount" class="badge neutral">0</span>
+      <div class="viewer-search-nav" aria-label="検索結果を移動">
+        <button id="viewerPrevMatchBtn" class="ghost viewer-search-button" type="button" aria-label="前の検索結果">↑</button>
+        <button id="viewerNextMatchBtn" class="ghost viewer-search-button" type="button" aria-label="次の検索結果">↓</button>
+        <span id="viewerMatchCount" class="badge neutral">0</span>
+      </div>
     </div>
     <div id="viewerMeta" class="viewer-meta"></div>
     <main id="viewerTranscript" class="viewer-transcript"></main>
