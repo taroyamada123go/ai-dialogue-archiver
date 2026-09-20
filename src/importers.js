@@ -1,4 +1,5 @@
 import { basename, extractMessageText, fmtTime, normalizeText, roleOf, sha256, stableId } from './core.js';
+import { neutralizeHtmlForSafeParsing } from './network-policy.js';
 
 export async function importFiles(files, onProgress = () => {}) {
   const sources = [];
@@ -78,7 +79,10 @@ async function importJsonFile(file) {
 
 async function importHtmlFile(file) {
   const html = await file.text();
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  // Never parse archive HTML with live subresource URLs. DOMParser can fetch
+  // <img>/<iframe> resources even though scripts are inert.
+  const safeParseHtml = neutralizeHtmlForSafeParsing(html);
+  const doc = new DOMParser().parseFromString(safeParseHtml, 'text/html');
   const extracted = extractMessagesFromHtml(doc);
   const visualHtml = extractVisualReplicaHtml(doc);
   const rawOriginalText = extractRawOriginalText(doc);
@@ -422,8 +426,11 @@ function parseOpenAIRaw(text) {
 }
 
 function extractVisualReplicaHtml(doc) {
-  const frame=doc.querySelector('#visual iframe[srcdoc],#visual-replica iframe[srcdoc],#visualReplica iframe[srcdoc],[data-layer="visual"] iframe[srcdoc],iframe[data-visual-replica][srcdoc]');
+  const stored=doc.querySelector('script#visual-replica-source[type="application/json"]');
+  if(stored){try{return JSON.parse(stored.textContent||'""')||null;}catch{}}
+  const frame=doc.querySelector('#visual iframe[srcdoc],#visual-replica iframe[srcdoc],#visualReplica iframe[srcdoc],[data-layer="visual"] iframe[srcdoc],iframe[data-visual-replica][srcdoc],#visual iframe[data-archiver-srcdoc],#visual-replica iframe[data-archiver-srcdoc],#visualReplica iframe[data-archiver-srcdoc],[data-layer="visual"] iframe[data-archiver-srcdoc],iframe[data-visual-replica][data-archiver-srcdoc]');
   if(frame?.getAttribute('srcdoc'))return frame.getAttribute('srcdoc');
+  if(frame?.getAttribute('data-archiver-srcdoc'))return frame.getAttribute('data-archiver-srcdoc');
   return null;
 }
 
