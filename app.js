@@ -18,6 +18,8 @@ const $=id=>document.getElementById(id);
 setup();
 
 function setup(){
+  applySavedAppTheme();
+  $('appThemeBtn')?.addEventListener('click',toggleAppTheme);
   document.querySelectorAll('[data-mode]').forEach(btn=>btn.addEventListener('click',()=>setMode(btn.dataset.mode)));
   $('fileInput').addEventListener('change',e=>handleFiles([...e.target.files]));
   const dz=$('dropZone');
@@ -51,8 +53,8 @@ function setup(){
   $('viewerLoadBtn').addEventListener('click',loadViewerIntoWorkspace);
   $('viewerExportBtn').addEventListener('click',exportViewerV15);
   $('viewerDeleteBtn').addEventListener('click',deleteViewerArchive);
-  $('viewerTopBtn').addEventListener('click',()=>{$('libraryViewer').scrollTo({top:0,behavior:'smooth'});});
-  $('viewerBottomBtn').addEventListener('click',()=>{$('libraryViewer').scrollTo({top:$('libraryViewer').scrollHeight,behavior:'smooth'});});
+  $('viewerTopBtn').addEventListener('click',()=>{const scroller=$('viewerPreviewOverlay').hidden?$('libraryViewer'):$('viewerPreviewOverlay');scroller.scrollTo({top:0,behavior:'smooth'});});
+  $('viewerBottomBtn').addEventListener('click',()=>{const scroller=$('viewerPreviewOverlay').hidden?$('libraryViewer'):$('viewerPreviewOverlay');scroller.scrollTo({top:scroller.scrollHeight,behavior:'smooth'});});
   $('viewerSearch').addEventListener('input',handleViewerSearchInput);
   $('viewerSearch').addEventListener('search',handleViewerSearchInput);
   $('viewerSearch').addEventListener('keydown',e=>{
@@ -60,7 +62,7 @@ function setup(){
   });
   $('viewerSearchGo').addEventListener('click',()=>moveViewerMatch(1));
   $('viewerPreviewBtn').addEventListener('click',openViewerPreview);
-  $('viewerPreviewBackBtn').addEventListener('click',()=>closeViewerPreview(true));
+  $('viewerPreviewBackBtn').addEventListener('click',closeViewer);
   $('viewerTranscriptBtn').addEventListener('click',()=>closeViewerPreview(true));
   $('viewerImageIndexBtn').addEventListener('click',toggleViewerImageMeta);
   $('viewerImagePromptsBtn').addEventListener('click',toggleViewerImagePrompts);
@@ -81,6 +83,29 @@ function setup(){
   $('runtimeBadge').className=`badge ${secure?'ok':'bad'}`;
   updateSelectors();
   loadLibrary();
+}
+
+
+function savedTheme(){
+  try{return localStorage.getItem('ada-theme')||localStorage.getItem('ada-viewer-theme')||'light';}catch{return 'light';}
+}
+function applySavedAppTheme(){
+  const dark=savedTheme()==='dark';
+  document.documentElement.classList.toggle('app-dark',dark);
+  syncAppThemeControl();
+}
+function toggleAppTheme(){
+  const dark=!document.documentElement.classList.contains('app-dark');
+  document.documentElement.classList.toggle('app-dark',dark);
+  try{localStorage.setItem('ada-theme',dark?'dark':'light');localStorage.setItem('ada-viewer-theme',dark?'dark':'light');}catch{}
+  syncAppThemeControl();
+  if(!$('libraryViewer')?.hidden){$('libraryViewer').classList.toggle('dark-theme',dark);syncViewerThemeControls();}
+}
+function syncAppThemeControl(){
+  const dark=document.documentElement.classList.contains('app-dark');
+  const b=$('appThemeBtn');if(!b)return;
+  b.setAttribute('aria-label',dark?'ライトモードへ':'ダークモードへ');
+  b.title=dark?'ライトモードへ':'ダークモードへ';
 }
 
 function setMode(mode){
@@ -411,27 +436,77 @@ function renderViewerMeta(){
 function renderViewerHeaderPanels(){
   const a=state.viewerArchive;if(!a)return;
   $('viewerHistoryPanel').innerHTML=`<div class="viewer-history-item"><strong>${escapeHtml(formatDate(a.updatedAt||a.savedAt))}</strong><span>ライブラリ保存済み会話 · ${escapeHtml(a.source?.name||'Local Library')}</span></div>`;
-  const overview=a.conversation?.overview||a.overview||null;
-  const keywords=a.conversation?.keywords||a.keywords||null;
-  const summaryText=typeof overview==='string'?overview:(overview?.summary||'保存済みOverviewはありません。AI生成は未接続です。');
-  const keywordText=Array.isArray(keywords)?keywords.join(' / '):typeof keywords==='string'?keywords:'';
-  $('viewerOverviewPanel').innerHTML=`<div class="viewer-overview-summary">${escapeHtml(summaryText)}</div>${keywordText?`<div class="viewer-overview-keywords">${escapeHtml(keywordText)}</div>`:''}`;
+  const conv=a.conversation||{};
+  const overview=conv.overview||a.overview||null;
+  const storedKeywords=conv.keywords||a.keywords||null;
+  const summaryText=typeof overview==='string'?overview:(overview?.summary||'保存済みOverviewはありません。');
+  const localKeywords=deriveLocalKeywords(conv,12);
+  const storedKeywordText=Array.isArray(storedKeywords)?storedKeywords.join(' / '):typeof storedKeywords==='string'?storedKeywords:'';
+  const aiCandidates=conv.aiAnnotations?.keywords||conv.aiAnnotations?.keyConcepts||a.aiAnnotations?.keywords||a.aiAnnotations?.keyConcepts||overview?.aiKeywords||overview?.keyConcepts||null;
+  const aiKeywordText=Array.isArray(aiCandidates)?aiCandidates.join(' / '):typeof aiCandidates==='string'?aiCandidates:'';
+  const rows=[];
+  if(localKeywords.length)rows.push(`<div class="viewer-overview-keywords"><span class="viewer-overview-source">重要語句 · LOCAL</span>${escapeHtml(localKeywords.join(' / '))}</div>`);
+  if(storedKeywordText)rows.push(`<div class="viewer-overview-keywords"><span class="viewer-overview-source">SAVED</span>${escapeHtml(storedKeywordText)}</div>`);
+  if(aiKeywordText)rows.push(`<div class="viewer-overview-keywords"><span class="viewer-overview-source">AI KEY CONCEPTS</span>${escapeHtml(aiKeywordText)}</div>`);
+  $('viewerOverviewPanel').innerHTML=`<div class="viewer-overview-summary">${escapeHtml(summaryText)}</div>${rows.join('')}`;
 }
 
+function deriveLocalKeywords(conv,limit=12){
+  const nodes=Object.values(conv?.nodes||{});
+  if(!nodes.length)return[];
+  const stop=new Set([
+    'これ','それ','あれ','この','その','あの','ここ','そこ','ため','よう','もの','こと','ところ','とき','です','ます','でした','ました','いる','ある','なる','する','して','した','され','から','まで','より','ので','のに','なら','では','でも','また','そして','ただ','という','として','について','ような','ように','かなり','もっと','少し','今回','今後','現在','以前','自分','私','あなた','ユーザー','chatgpt','assistant','user','考える','思う','言う','見る','分かる','わかる','使う','出る','入る','持つ','the','and','that','this','with','from','have','has','for','not','are','was','were','will','would','can','could','into','about','your','you','our','but','its','than','then'
+  ]);
+  const freq=new Map(),spread=new Map(),roles=new Map();
+  let segmenter=null;try{segmenter=new Intl.Segmenter('ja',{granularity:'word'});}catch{}
+  const tokenize=text=>{
+    const norm=String(text||'').normalize('NFKC').toLowerCase();
+    if(segmenter){
+      const raw=[...segmenter.segment(norm)].filter(x=>x.isWordLike).map(x=>x.segment);
+      const out=[];
+      for(const part of raw){
+        if(out.length&&['性','的','化','感','力','論','学','観'].includes(part))out[out.length-1]+=part;
+        else out.push(part);
+      }
+      return out;
+    }
+    return norm.match(/[\p{L}\p{N}ー々]{2,}/gu)||[];
+  };
+  nodes.forEach((n,idx)=>{
+    const seen=new Set();
+    for(const raw of tokenize(n.text||'')){
+      const token=raw.replace(/^[\s\p{P}\p{S}]+|[\s\p{P}\p{S}]+$/gu,'');
+      if(token.length<2||token.length>28||/^\d+(?:[.,]\d+)*$/.test(token)||stop.has(token))continue;
+      freq.set(token,(freq.get(token)||0)+1);
+      if(!seen.has(token)){spread.set(token,(spread.get(token)||0)+1);seen.add(token);}
+      if(!roles.has(token))roles.set(token,new Set());roles.get(token).add(n.role||'unknown');
+    }
+  });
+  return [...freq.keys()].map(token=>{
+    const f=freq.get(token)||0,d=spread.get(token)||0,r=roles.get(token)?.size||1;
+    const lengthBoost=token.length>=3?1.12:1;
+    const score=(Math.log2(f+1)*1.7+Math.log2(d+1)*1.2+(r>1?.45:0))*lengthBoost;
+    return {token,score,f,d};
+  }).filter(x=>x.f>=2||x.d>=2).sort((a,b)=>b.score-a.score||b.d-a.d||b.f-a.f||a.token.localeCompare(b.token,'ja')).slice(0,limit).map(x=>x.token);
+}
 function toggleViewerOverview(){
   const p=$('viewerOverviewPanel');p.hidden=!p.hidden;
   $('viewerOverviewBtn').textContent=`${p.hidden?'▸':'▾'} Overview & Key Concepts`;
 }
 
 function applySavedViewerTheme(){
-  let dark=false;try{dark=localStorage.getItem('ada-viewer-theme')==='dark';}catch{}
+  const dark=savedTheme()==='dark';
   $('libraryViewer').classList.toggle('dark-theme',dark);
+  document.documentElement.classList.toggle('app-dark',dark);
+  syncAppThemeControl();
   syncViewerThemeControls();
 }
 function toggleViewerTheme(){
   const dark=!$('libraryViewer').classList.contains('dark-theme');
   $('libraryViewer').classList.toggle('dark-theme',dark);
-  try{localStorage.setItem('ada-viewer-theme',dark?'dark':'light');}catch{}
+  document.documentElement.classList.toggle('app-dark',dark);
+  try{localStorage.setItem('ada-theme',dark?'dark':'light');localStorage.setItem('ada-viewer-theme',dark?'dark':'light');}catch{}
+  syncAppThemeControl();
   syncViewerThemeControls();
 }
 function syncViewerThemeControls(){

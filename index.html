@@ -21,24 +21,25 @@
     </div>
     <div class="top-actions">
       <span id="runtimeBadge" class="badge neutral">LOCAL</span>
+      <button id="appThemeBtn" class="app-theme-button" aria-label="ダークモードへ"><span class="app-theme-dot" aria-hidden="true"></span></button>
       <button id="installBtn" class="ghost" hidden>ホーム画面に追加</button>
     </div>
   </header>
 
   <main class="shell">
-    <section class="intro">
-      <div>
+    <section class="intro home-intro">
+      <div class="home-title-line">
         <div class="eyebrow">CAPTURE / VERIFY / READ</div>
         <h1>会話を保存・検証・閲覧する。</h1>
-        <p>読み込んだ会話はこのWebアプリ内のライブラリに保存して、そのまま検索・閲覧できます。</p>
       </div>
-      <div class="privacy-card">
-        <span class="dot"></span>
-        <div><strong>端末内処理</strong><small>会話本文はブラウザ内で処理。外部リソースは自動取得せず、タップした場合だけ外部へ移動します。</small></div>
+      <div class="home-spec-line" aria-label="アプリ仕様">
+        <span><strong>端末内処理</strong> 会話本文はブラウザ内で処理。外部リソースは自動取得しません。</span>
+        <span><strong>ライブラリ</strong> 読み込んだ会話はこのWebアプリ内に保存し、そのまま検索・閲覧できます。</span>
+        <span><strong>保存方式と限界</strong> IndexedDB / OPFSを使用。重要な会話はArchive Bundle / v15 HTMLも残してください。</span>
       </div>
     </section>
 
-    <section class="panel library-panel" id="libraryPanel">
+    <section class="panel library-panel home-panel" id="libraryPanel">
       <div class="panel-head">
         <div><span class="section-no">LIB</span><h2>保存済み会話</h2></div>
         <span id="libraryCount" class="badge neutral">0</span>
@@ -48,10 +49,9 @@
         <button id="refreshLibraryBtn" class="ghost">更新</button>
       </div>
       <div id="libraryList" class="library-list empty-state">まだ保存済み会話はありません。</div>
-      <div class="library-note">このライブラリは、現在のGitHub Pages URLを開いているSafariのサイトデータ内に保存されます。重要な会話はArchive Bundleも残してください。</div>
     </section>
 
-    <section class="mode-grid">
+    <section class="mode-grid home-mode-grid">
       <button class="mode-card active" data-mode="quick">
         <span class="mode-tag">QUICK</span>
         <strong>手軽に保存</strong>
@@ -64,72 +64,64 @@
       </button>
     </section>
 
-    <section class="panel import-panel">
+    <section class="panel import-panel home-panel home-import-panel">
       <div class="panel-head">
         <div><span class="section-no">01</span><h2>資料を読み込む</h2></div>
         <span id="modeDescription" class="badge">Quick Capture</span>
       </div>
-      <label id="dropZone" class="drop-zone">
+      <label id="dropZone" class="drop-zone compact-drop-zone">
         <input id="fileInput" type="file" multiple accept=".zip,.json,.html,.htm">
         <div class="drop-icon">＋</div>
-        <strong>Export ZIP / JSON / v15・SingleFile HTML</strong>
-        <span>タップしてファイルを選択</span>
-        <small>PC/Macではドラッグ＆ドロップにも対応</small>
+        <div class="drop-copy"><strong>Export ZIP / JSON / v15・SingleFile HTML</strong><span>タップして選択 · Mac/PCはドラッグ＆ドロップ</span></div>
       </label>
       <div id="progress" class="progress" hidden><div id="progressBar"></div><span id="progressText"></span></div>
-      <div id="sourceList" class="source-list empty-state">まだ資料は読み込まれていません。</div>
+      <div id="sourceList" class="source-list empty-state compact-source-list">まだ資料は読み込まれていません。</div>
     </section>
 
-    <section class="panel">
-      <div class="panel-head"><div><span class="section-no">02</span><h2>内部完全性</h2></div><span class="muted">決定論的検査</span></div>
-      <div class="split">
-        <div>
-          <label class="field-label" for="inspectSelect">会話</label>
-          <select id="inspectSelect"></select>
-          <div id="integritySummary" class="integrity-summary empty-state">会話を読み込むと検査結果が表示されます。</div>
-        </div>
-        <div id="issueList" class="issue-list empty-state">エラー・警告の詳細</div>
-      </div>
-    </section>
+    <details class="advanced-workbench">
+      <summary>検証・保存の詳細操作</summary>
+      <div class="advanced-workbench-body">
+        <section class="panel">
+          <div class="panel-head"><div><span class="section-no">02</span><h2>内部完全性</h2></div><span class="muted">決定論的検査</span></div>
+          <div class="split">
+            <div>
+              <label class="field-label" for="inspectSelect">会話</label>
+              <select id="inspectSelect"></select>
+              <div id="integritySummary" class="integrity-summary empty-state">会話を読み込むと検査結果が表示されます。</div>
+            </div>
+            <div id="issueList" class="issue-list empty-state">エラー・警告の詳細</div>
+          </div>
+        </section>
 
-    <section class="panel">
-      <div class="panel-head"><div><span class="section-no">03</span><h2>本文・枝分かれ照合</h2></div><span class="muted">ID非依存</span></div>
-      <p class="panel-note">Conversation IDだけでなく、本文ハッシュ・正規化本文・前後関係・順序・枝分かれ構造を比較します。</p>
-      <div class="compare-controls">
-        <div><label class="field-label">資料 A</label><select id="compareA"></select></div>
-        <div class="swap">↔</div>
-        <div><label class="field-label">資料 B</label><select id="compareB"></select></div>
-        <button id="compareBtn" class="primary">照合する</button>
-      </div>
-      <div id="compareResult" class="empty-state">2つの会話を選ぶと差分を検出できます。</div>
-    </section>
+        <section class="panel">
+          <div class="panel-head"><div><span class="section-no">03</span><h2>本文・枝分かれ照合</h2></div><span class="muted">ID非依存</span></div>
+          <p class="panel-note">Conversation IDだけでなく、本文ハッシュ・正規化本文・前後関係・順序・枝分かれ構造を比較します。</p>
+          <div class="compare-controls">
+            <div><label class="field-label">資料 A</label><select id="compareA"></select></div>
+            <div class="swap">↔</div>
+            <div><label class="field-label">資料 B</label><select id="compareB"></select></div>
+            <button id="compareBtn" class="primary">照合する</button>
+          </div>
+          <div id="compareResult" class="empty-state">2つの会話を選ぶと差分を検出できます。</div>
+        </section>
 
-    <section class="panel">
-      <div class="panel-head"><div><span class="section-no">04</span><h2>保存・出力</h2></div><span id="archiveStatus" class="badge neutral">NO ARCHIVE</span></div>
-      <div class="action-grid">
-        <button id="saveLocalBtn" class="action-card"><strong>ライブラリへ保存</strong><small>選択中の会話をWebアプリ内に保存して閲覧可能にする</small></button>
-        <button id="exportArchiveBtn" class="action-card"><strong>Archive Bundle</strong><small>原本＋manifest＋検査レポートをZIP保存</small></button>
-        <button id="exportV15Btn" class="action-card"><strong>v15 HTML</strong><small>Mac等で直接開ける自己完結HTMLとして出力</small></button>
-        <button id="exportReportBtn" class="action-card"><strong>Verification Report</strong><small>検査結果だけをJSON出力</small></button>
+        <section class="panel">
+          <div class="panel-head"><div><span class="section-no">04</span><h2>保存・出力</h2></div><span id="archiveStatus" class="badge neutral">NO ARCHIVE</span></div>
+          <div class="action-grid">
+            <button id="saveLocalBtn" class="action-card"><strong>ライブラリへ保存</strong><small>選択中の会話をWebアプリ内に保存して閲覧可能にする</small></button>
+            <button id="exportArchiveBtn" class="action-card"><strong>Archive Bundle</strong><small>原本＋manifest＋検査レポートをZIP保存</small></button>
+            <button id="exportV15Btn" class="action-card"><strong>v15 HTML</strong><small>Mac等で直接開ける自己完結HTMLとして出力</small></button>
+            <button id="exportReportBtn" class="action-card"><strong>Verification Report</strong><small>検査結果だけをJSON出力</small></button>
+          </div>
+          <div class="legend">
+            <span><i class="ok"></i> INTERNAL PASS = 読み込んだ原本内部の整合性</span>
+            <span><i class="cross"></i> CROSS-SOURCE = 独立資料との本文/構造一致</span>
+            <span><i class="warn"></i> UNVERIFIED = 外部原典全体の存在までは未証明</span>
+          </div>
+        </section>
       </div>
-      <div class="legend">
-        <span><i class="ok"></i> INTERNAL PASS = 読み込んだ原本内部の整合性</span>
-        <span><i class="cross"></i> CROSS-SOURCE = 独立資料との本文/構造一致</span>
-        <span><i class="warn"></i> UNVERIFIED = 外部原典全体の存在までは未証明</span>
-      </div>
-    </section>
-
-    <section class="panel compact">
-      <details>
-        <summary>保存方式と限界</summary>
-        <div class="limitations">
-          <p><strong>ライブラリ：</strong>IndexedDBへ正規化会話を保存し、対応環境では原本ファイルをOPFSにも保持します。</p>
-          <p><strong>重要：</strong>Safariのサイトデータを削除するとライブラリも失われる可能性があります。Archive Bundle / v15 HTMLは外部バックアップとして残してください。</p>
-        </div>
-      </details>
-    </section>
+    </details>
   </main>
-
   <footer>AI Dialogue Archiver · local-first · no AI required for verification</footer>
   <div id="toast" class="toast" hidden></div>
 
@@ -141,14 +133,15 @@
             <strong id="viewerTitle">Conversation</strong>
           </div>
           <div class="viewer-top-actions">
-            <button id="viewerThemeBtn" class="viewer-surface-icon viewer-theme-button" aria-label="テーマ切替"><span class="viewer-theme-dot" aria-hidden="true">●</span></button>
-            <button id="viewerMoreBtn" class="viewer-surface-icon" aria-label="操作">•••</button>
-            <button id="viewerCloseBtn" class="viewer-surface-icon viewer-back-icon" aria-label="戻る">‹</button>
+            <button id="viewerThemeBtn" class="viewer-surface-icon viewer-theme-button" aria-label="テーマ切替"><span class="viewer-theme-dot" aria-hidden="true"></span></button>
+            <button id="viewerMoreBtn" class="viewer-surface-icon viewer-more-icon" aria-label="操作"><span aria-hidden="true">···</span></button>
+            <button id="viewerCloseBtn" class="viewer-surface-icon viewer-back-icon" aria-label="初期ページへ戻る">◀︎</button>
           </div>
         </div>
 
         <div class="viewer-update-row">
           <button id="viewerHistoryBtn" class="viewer-history-trigger"><strong>Last Updated:</strong> <span id="viewerUpdatedAt">—</span></button>
+          <div id="viewerMeta" class="viewer-meta viewer-meta-inline"></div>
         </div>
 
         <div class="viewer-control-row">
@@ -180,15 +173,14 @@
         <button id="viewerDeleteBtn" class="danger-button">ライブラリから削除</button>
       </div>
 
-      <div id="viewerMeta" class="viewer-meta"></div>
       <main id="viewerTranscript" class="viewer-transcript viewer-layer-pane"></main>
       <main id="viewerSemantic" class="viewer-semantic viewer-layer-pane" hidden></main>
       <main id="viewerRaw" class="viewer-raw viewer-layer-pane" hidden></main>
     </div>
 
     <div class="viewer-edge-nav" aria-label="上下移動">
-      <button id="viewerTopBtn" aria-label="最上部へ">↑</button>
-      <button id="viewerBottomBtn" aria-label="最下部へ">↓</button>
+      <button id="viewerTopBtn" aria-label="最上部へ">▲</button>
+      <button id="viewerBottomBtn" aria-label="最下部へ">▼</button>
     </div>
 
     <section id="viewerPreviewOverlay" class="viewer-preview-overlay" hidden aria-modal="true" role="dialog">
@@ -199,9 +191,9 @@
               <strong id="viewerPreviewTitle">Conversation</strong>
             </div>
             <div class="viewer-top-actions">
-              <button id="viewerPreviewThemeBtn" class="viewer-surface-icon viewer-theme-button" aria-label="テーマ切替"><span class="viewer-theme-dot" aria-hidden="true">●</span></button>
-              <button id="viewerPreviewMoreBtn" class="viewer-surface-icon" aria-label="操作">•••</button>
-              <button id="viewerPreviewBackBtn" class="viewer-surface-icon viewer-back-icon" aria-label="Transcriptへ戻る">‹</button>
+              <button id="viewerPreviewThemeBtn" class="viewer-surface-icon viewer-theme-button" aria-label="テーマ切替"><span class="viewer-theme-dot" aria-hidden="true"></span></button>
+              <button id="viewerPreviewMoreBtn" class="viewer-surface-icon viewer-more-icon" aria-label="操作"><span aria-hidden="true">···</span></button>
+              <button id="viewerPreviewBackBtn" class="viewer-surface-icon viewer-back-icon" aria-label="初期ページへ戻る">◀︎</button>
             </div>
           </div>
           <div class="viewer-preview-index-row">
