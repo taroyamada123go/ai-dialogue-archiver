@@ -14,113 +14,128 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="mark">A</div>
-      <div><strong>AI Dialogue Archiver</strong><span>Local-first conversation archive</span></div>
+  <header class="topbar home-topbar">
+    <div class="topbar-inner">
+      <div class="home-brand-line">
+        <strong class="home-app-title">AI Dialogue Archiver</strong>
+        <span class="home-app-subtitle" data-i18n="homeSubtitle">会話を保存・検証・閲覧する。</span>
+      </div>
+      <div class="top-actions home-top-actions">
+        <span id="runtimeBadge" class="badge neutral">LOCAL</span>
+        <button id="appThemeBtn" class="app-theme-button" aria-label="ダークモードへ"><span class="app-theme-dot" aria-hidden="true"></span></button>
+        <button id="appSettingsBtn" class="app-icon-button app-settings-button" aria-label="設定"><span class="settings-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
+        <button id="appMoreBtn" class="app-icon-button app-more-button" aria-label="このアプリについて"><span aria-hidden="true">···</span></button>
+        <button id="installBtn" class="ghost" hidden>ホーム画面に追加</button>
+      </div>
     </div>
-    <div class="top-actions">
-      <span id="runtimeBadge" class="badge neutral">LOCAL</span>
-      <button id="appThemeBtn" class="app-theme-button" aria-label="ダークモードへ"><span class="app-theme-dot" aria-hidden="true"></span></button>
-      <button id="installBtn" class="ghost" hidden>ホーム画面に追加</button>
+    <div id="appSettingsPanel" class="home-popover home-settings-panel" hidden>
+      <div class="home-popover-title" data-i18n="settings">設定</div>
+      <div class="settings-row">
+        <span data-i18n="uiLanguage">UI Language</span>
+        <div class="settings-segmented" role="group" aria-label="UI Language">
+          <button data-ui-language="ja">日本語</button>
+          <button data-ui-language="en">English</button>
+          <button data-ui-language="bi">日本語＋English</button>
+        </div>
+      </div>
+    </div>
+    <div id="appInfoPanel" class="home-popover home-info-panel" hidden>
+      <div><strong>CAPTURE / VERIFY / READ</strong><span data-i18n="homeSubtitle">会話を保存・検証・閲覧する。</span></div>
+      <div><strong data-i18n="localProcessing">端末内処理</strong><span data-i18n="localProcessingDesc">会話本文はブラウザ内で処理。外部リソースは自動取得しません。</span></div>
+      <div><strong data-i18n="library">ライブラリ</strong><span data-i18n="libraryDesc">読み込んだ会話はこのWebアプリ内に保存し、そのまま検索・閲覧できます。</span></div>
+      <div><strong data-i18n="storageLimits">保存方式と限界</strong><span data-i18n="storageLimitsDesc">IndexedDB / OPFSを使用。重要な会話はArchive Bundle / v15 HTMLも残してください。</span></div>
     </div>
   </header>
 
-  <main class="shell">
-    <section class="intro home-intro">
-      <div class="home-title-line">
-        <div class="eyebrow">CAPTURE / VERIFY / READ</div>
-        <h1>会話を保存・検証・閲覧する。</h1>
+  <main class="shell home-shell">
+    <section class="home-library-header" aria-label="ライブラリ検索">
+      <div class="home-black-heading" data-i18n="savedConversations">保存済み会話</div>
+      <span class="home-control-spacer"></span>
+      <div class="library-search-mode" role="group" aria-label="検索範囲">
+        <button data-library-search-mode="title" class="active" data-i18n="titleSearch">Title</button>
+        <button data-library-search-mode="full" data-i18n="fullTextSearch">Full Text</button>
       </div>
-      <div class="home-spec-line" aria-label="アプリ仕様">
-        <span><strong>端末内処理</strong> 会話本文はブラウザ内で処理。外部リソースは自動取得しません。</span>
-        <span><strong>ライブラリ</strong> 読み込んだ会話はこのWebアプリ内に保存し、そのまま検索・閲覧できます。</span>
-        <span><strong>保存方式と限界</strong> IndexedDB / OPFSを使用。重要な会話はArchive Bundle / v15 HTMLも残してください。</span>
+      <span id="librarySearchCount" class="home-search-count">0 / 0</span>
+      <div class="home-search-box">
+        <input id="librarySearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="タイトル・保存元を検索" data-i18n-placeholder="librarySearchPlaceholder">
+        <button id="librarySearchGo" class="home-search-go" type="button" aria-label="最初の検索結果を開く">→</button>
       </div>
     </section>
 
-    <section class="panel library-panel home-panel" id="libraryPanel">
-      <div class="panel-head">
-        <div><span class="section-no">LIB</span><h2>保存済み会話</h2></div>
-        <span id="libraryCount" class="badge neutral">0</span>
-      </div>
-      <div class="library-toolbar">
-        <input id="librarySearch" class="text-input" type="search" placeholder="タイトル・保存元を検索" autocomplete="off">
-        <button id="refreshLibraryBtn" class="ghost">更新</button>
-      </div>
-      <div id="libraryList" class="library-list empty-state">まだ保存済み会話はありません。</div>
-    </section>
+    <section class="home-workspace">
+      <aside class="home-operations-column">
+        <section class="mode-grid home-mode-grid compact-mode-stack" aria-label="保存モード">
+          <button class="mode-card active" data-mode="quick">
+            <span class="mode-tag">QUICK</span>
+            <strong data-i18n="quickTitle">手軽に保存</strong>
+            <small data-i18n="quickDesc">v15 HTML / SingleFile HTML / JSONを読み込み、選択した会話をライブラリへ保存。</small>
+          </button>
+          <button class="mode-card" data-mode="verified">
+            <span class="mode-tag">VERIFY</span>
+            <strong data-i18n="verifiedTitle">完成保存</strong>
+            <small data-i18n="verifiedDesc">OpenAI Exportを内部検査し、独立キャプチャとの本文・分岐差分まで照合。</small>
+          </button>
+        </section>
 
-    <section class="mode-grid home-mode-grid">
-      <button class="mode-card active" data-mode="quick">
-        <span class="mode-tag">QUICK</span>
-        <strong>手軽に保存</strong>
-        <small>v15 HTML / SingleFile HTML / JSONを読み込み、選択した会話をライブラリへ保存。</small>
-      </button>
-      <button class="mode-card" data-mode="verified">
-        <span class="mode-tag">VERIFY</span>
-        <strong>完成保存</strong>
-        <small>OpenAI Exportを内部検査し、独立キャプチャとの本文・分岐差分まで照合。</small>
-      </button>
-    </section>
+        <section class="panel import-panel home-panel home-import-panel">
+          <div class="panel-head compact-panel-head">
+            <div><span class="section-no">01</span><h2 data-i18n="importSource">資料を読み込む</h2></div>
+            <span id="modeDescription" class="badge">Quick Capture</span>
+          </div>
+          <label id="dropZone" class="drop-zone compact-drop-zone">
+            <input id="fileInput" type="file" multiple accept=".zip,.json,.html,.htm">
+            <div class="drop-icon">＋</div>
+            <div class="drop-copy"><strong>Export ZIP / JSON / v15 / SingleFile</strong><span data-i18n="tapOrDrop">タップして選択 · Mac/PCはドラッグ＆ドロップ</span></div>
+          </label>
+          <div id="progress" class="progress" hidden><div id="progressBar"></div><span id="progressText"></span></div>
+          <div id="sourceList" class="source-list empty-state compact-source-list">まだ資料は読み込まれていません。</div>
+        </section>
 
-    <section class="panel import-panel home-panel home-import-panel">
-      <div class="panel-head">
-        <div><span class="section-no">01</span><h2>資料を読み込む</h2></div>
-        <span id="modeDescription" class="badge">Quick Capture</span>
-      </div>
-      <label id="dropZone" class="drop-zone compact-drop-zone">
-        <input id="fileInput" type="file" multiple accept=".zip,.json,.html,.htm">
-        <div class="drop-icon">＋</div>
-        <div class="drop-copy"><strong>Export ZIP / JSON / v15・SingleFile HTML</strong><span>タップして選択 · Mac/PCはドラッグ＆ドロップ</span></div>
-      </label>
-      <div id="progress" class="progress" hidden><div id="progressBar"></div><span id="progressText"></span></div>
-      <div id="sourceList" class="source-list empty-state compact-source-list">まだ資料は読み込まれていません。</div>
-    </section>
+        <section class="panel home-panel home-output-panel">
+          <div class="panel-head compact-panel-head"><div><span class="section-no">02</span><h2 data-i18n="saveExport">保存・出力</h2></div><span id="archiveStatus" class="badge neutral">NO ARCHIVE</span></div>
+          <div class="compact-action-grid">
+            <button id="saveLocalBtn" class="action-card compact-action"><strong data-i18n="saveLibrary">Library</strong><small data-i18n="saveLibraryDesc">Webアプリ内へ保存</small></button>
+            <button id="exportArchiveBtn" class="action-card compact-action"><strong>Bundle</strong><small>Archive ZIP</small></button>
+            <button id="exportV15Btn" class="action-card compact-action"><strong>v15</strong><small>HTML</small></button>
+            <button id="exportReportBtn" class="action-card compact-action"><strong>Report</strong><small>JSON</small></button>
+          </div>
+        </section>
 
-    <details class="advanced-workbench">
-      <summary>検証・保存の詳細操作</summary>
-      <div class="advanced-workbench-body">
-        <section class="panel">
-          <div class="panel-head"><div><span class="section-no">02</span><h2>内部完全性</h2></div><span class="muted">決定論的検査</span></div>
-          <div class="split">
-            <div>
-              <label class="field-label" for="inspectSelect">会話</label>
+        <details id="verificationWorkbench" class="advanced-workbench verification-workbench">
+          <summary data-i18n="verification">検証</summary>
+          <div class="advanced-workbench-body verification-body">
+            <div class="verification-drop-row" aria-label="ライブラリから検証資料を選択">
+              <button id="compareDropA" class="verification-drop-slot" type="button"><span>A</span><small data-i18n="dropArchive">ライブラリからドロップ</small></button>
+              <button id="compareDropB" class="verification-drop-slot" type="button"><span>B</span><small data-i18n="dropArchive">ライブラリからドロップ</small></button>
+            </div>
+            <section class="panel compact-verification-panel">
+              <div class="panel-head"><div><span class="section-no">03</span><h2 data-i18n="integrity">内部完全性</h2></div><span class="muted">deterministic</span></div>
+              <label class="field-label" for="inspectSelect" data-i18n="conversation">会話</label>
               <select id="inspectSelect"></select>
               <div id="integritySummary" class="integrity-summary empty-state">会話を読み込むと検査結果が表示されます。</div>
-            </div>
-            <div id="issueList" class="issue-list empty-state">エラー・警告の詳細</div>
+              <div id="issueList" class="issue-list empty-state">エラー・警告の詳細</div>
+            </section>
+            <section class="panel compact-verification-panel">
+              <div class="panel-head"><div><span class="section-no">04</span><h2 data-i18n="compare">本文・枝分かれ照合</h2></div><span class="muted">ID-independent</span></div>
+              <div class="compare-controls compact-compare-controls">
+                <div><label class="field-label">A</label><select id="compareA"></select></div>
+                <div><label class="field-label">B</label><select id="compareB"></select></div>
+                <button id="compareBtn" class="primary" data-i18n="compareAction">照合する</button>
+              </div>
+              <div id="compareResult" class="empty-state">2つの会話を選ぶと差分を検出できます。</div>
+            </section>
           </div>
-        </section>
+        </details>
+      </aside>
 
-        <section class="panel">
-          <div class="panel-head"><div><span class="section-no">03</span><h2>本文・枝分かれ照合</h2></div><span class="muted">ID非依存</span></div>
-          <p class="panel-note">Conversation IDだけでなく、本文ハッシュ・正規化本文・前後関係・順序・枝分かれ構造を比較します。</p>
-          <div class="compare-controls">
-            <div><label class="field-label">資料 A</label><select id="compareA"></select></div>
-            <div class="swap">↔</div>
-            <div><label class="field-label">資料 B</label><select id="compareB"></select></div>
-            <button id="compareBtn" class="primary">照合する</button>
-          </div>
-          <div id="compareResult" class="empty-state">2つの会話を選ぶと差分を検出できます。</div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head"><div><span class="section-no">04</span><h2>保存・出力</h2></div><span id="archiveStatus" class="badge neutral">NO ARCHIVE</span></div>
-          <div class="action-grid">
-            <button id="saveLocalBtn" class="action-card"><strong>ライブラリへ保存</strong><small>選択中の会話をWebアプリ内に保存して閲覧可能にする</small></button>
-            <button id="exportArchiveBtn" class="action-card"><strong>Archive Bundle</strong><small>原本＋manifest＋検査レポートをZIP保存</small></button>
-            <button id="exportV15Btn" class="action-card"><strong>v15 HTML</strong><small>Mac等で直接開ける自己完結HTMLとして出力</small></button>
-            <button id="exportReportBtn" class="action-card"><strong>Verification Report</strong><small>検査結果だけをJSON出力</small></button>
-          </div>
-          <div class="legend">
-            <span><i class="ok"></i> INTERNAL PASS = 読み込んだ原本内部の整合性</span>
-            <span><i class="cross"></i> CROSS-SOURCE = 独立資料との本文/構造一致</span>
-            <span><i class="warn"></i> UNVERIFIED = 外部原典全体の存在までは未証明</span>
-          </div>
-        </section>
-      </div>
-    </details>
+      <section class="panel library-panel home-panel home-library-column" id="libraryPanel">
+        <div class="library-column-head">
+          <span class="muted" data-i18n="libraryHint">会話をタップして開く · 検証時はA/Bへドラッグ</span>
+          <div><span id="libraryCount" class="badge neutral">0</span><button id="refreshLibraryBtn" class="ghost" data-i18n="refresh">更新</button></div>
+        </div>
+        <div id="libraryList" class="library-list empty-state">まだ保存済み会話はありません。</div>
+      </section>
+    </section>
   </main>
   <footer>AI Dialogue Archiver · local-first · no AI required for verification</footer>
   <div id="toast" class="toast" hidden></div>

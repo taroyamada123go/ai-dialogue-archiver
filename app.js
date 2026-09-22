@@ -11,15 +11,20 @@ import { protectFragmentForDisplay, externalUrlFromGate } from './src/network-po
 
 const state={
   mode:'quick',sources:[],comparison:null,autoMatches:[],installPrompt:null,
-  library:[],viewerArchive:null,viewerCurrentNode:null,viewerLayer:'visual',viewerMatches:[],viewerMatchIndex:-1,viewerImages:[],viewerImageMetaVisible:true,viewerTranscriptScrollTop:0,viewerSearchOrigin:null,viewerLastSearchQuery:'',viewerSearchSnapshots:null,
+  library:[],librarySearchMode:'title',librarySearchResults:[],uiLanguage:'ja',viewerArchive:null,viewerCurrentNode:null,viewerLayer:'visual',viewerMatches:[],viewerMatchIndex:-1,viewerImages:[],viewerImageMetaVisible:true,viewerTranscriptScrollTop:0,viewerSearchOrigin:null,viewerLastSearchQuery:'',viewerSearchSnapshots:null,
 };
 const $=id=>document.getElementById(id);
 
-setup();
 
 function setup(){
   applySavedAppTheme();
+  state.uiLanguage=savedUiLanguage();
+  applyUiLanguage();
   $('appThemeBtn')?.addEventListener('click',toggleAppTheme);
+  $('appSettingsBtn')?.addEventListener('click',e=>{e.stopPropagation();toggleHomePopover('appSettingsPanel');});
+  $('appMoreBtn')?.addEventListener('click',e=>{e.stopPropagation();toggleHomePopover('appInfoPanel');});
+  document.querySelectorAll('[data-ui-language]').forEach(btn=>btn.addEventListener('click',()=>setUiLanguage(btn.dataset.uiLanguage)));
+  document.querySelectorAll('[data-library-search-mode]').forEach(btn=>btn.addEventListener('click',()=>setLibrarySearchMode(btn.dataset.librarySearchMode)));
   document.querySelectorAll('[data-mode]').forEach(btn=>btn.addEventListener('click',()=>setMode(btn.dataset.mode)));
   $('fileInput').addEventListener('change',e=>handleFiles([...e.target.files]));
   const dz=$('dropZone');
@@ -34,11 +39,25 @@ function setup(){
   $('exportReportBtn').addEventListener('click',exportReport);
 
   $('librarySearch').addEventListener('input',renderLibrary);
+  $('librarySearch').addEventListener('search',renderLibrary);
+  $('librarySearchGo')?.addEventListener('click',openFirstLibrarySearchResult);
   $('refreshLibraryBtn').addEventListener('click',loadLibrary);
   $('libraryList').addEventListener('click',e=>{
+    const assign=e.target.closest('[data-assign-archive]');
+    if(assign){assignArchiveToVerification(assign.dataset.archiveId,assign.dataset.assignArchive);return;}
     const card=e.target.closest('[data-open-archive]');
     if(card) openArchive(card.dataset.openArchive);
   });
+  $('libraryList').addEventListener('dragstart',e=>{
+    const card=e.target.closest('[data-archive-id]');if(!card||!e.dataTransfer)return;
+    e.dataTransfer.effectAllowed='copy';e.dataTransfer.setData('application/x-ai-dialogue-archive',card.dataset.archiveId);e.dataTransfer.setData('text/plain',card.dataset.archiveId);
+  });
+  for(const [id,target] of [['compareDropA','A'],['compareDropB','B']]){
+    const slot=$(id);if(!slot)continue;
+    slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('drag-over');});
+    slot.addEventListener('dragleave',()=>slot.classList.remove('drag-over'));
+    slot.addEventListener('drop',e=>{e.preventDefault();slot.classList.remove('drag-over');const archiveId=e.dataTransfer?.getData('application/x-ai-dialogue-archive')||e.dataTransfer?.getData('text/plain');if(archiveId)assignArchiveToVerification(archiveId,target);});
+  }
 
   $('viewerCloseBtn').addEventListener('click',closeViewer);
   const toggleActions=e=>{e.stopPropagation();$('viewerActions').hidden=!$('viewerActions').hidden;};
@@ -72,6 +91,8 @@ function setup(){
   $('viewerTranscript').addEventListener('click',handleViewerTranscriptClick);
   document.addEventListener('click',e=>{
     if(!$('viewerLayerCtl').contains(e.target))$('viewerLayerCtl').classList.remove('open');
+    if(!$('appSettingsPanel')?.contains(e.target)&&e.target!==$('appSettingsBtn'))$('appSettingsPanel').hidden=true;
+    if(!$('appInfoPanel')?.contains(e.target)&&e.target!==$('appMoreBtn'))$('appInfoPanel').hidden=true;
     if(!$('viewerActions').contains(e.target)&&e.target!==$('viewerMoreBtn')&&e.target!==$('viewerPreviewMoreBtn'))$('viewerActions').hidden=true;
   });
 
@@ -107,6 +128,55 @@ function syncAppThemeControl(){
   b.setAttribute('aria-label',dark?'ライトモードへ':'ダークモードへ');
   b.title=dark?'ライトモードへ':'ダークモードへ';
 }
+
+
+const UI_TEXT={
+  homeSubtitle:{ja:'会話を保存・検証・閲覧する。',en:'Capture, verify, and read conversations.'},
+  settings:{ja:'設定',en:'Settings'},uiLanguage:{ja:'UI Language',en:'UI Language'},
+  localProcessing:{ja:'端末内処理',en:'Local processing'},localProcessingDesc:{ja:'会話本文はブラウザ内で処理。外部リソースは自動取得しません。',en:'Conversation content is processed in the browser. External resources are not fetched automatically.'},
+  library:{ja:'ライブラリ',en:'Library'},libraryDesc:{ja:'読み込んだ会話はこのWebアプリ内に保存し、そのまま検索・閲覧できます。',en:'Imported conversations can be stored, searched, and read in this web app.'},
+  storageLimits:{ja:'保存方式と限界',en:'Storage & limits'},storageLimitsDesc:{ja:'IndexedDB / OPFSを使用。重要な会話はArchive Bundle / v15 HTMLも残してください。',en:'Uses IndexedDB / OPFS. Keep an Archive Bundle / v15 HTML backup for important conversations.'},
+  savedConversations:{ja:'保存済み会話',en:'Saved Conversations'},titleSearch:{ja:'Title',en:'Title'},fullTextSearch:{ja:'全文',en:'Full Text'},
+  librarySearchPlaceholder:{ja:'タイトル・保存元を検索',en:'Search title / source'},libraryFullSearchPlaceholder:{ja:'全会話の本文を単語検索',en:'Search full text across all conversations'},
+  quickTitle:{ja:'手軽に保存',en:'Quick Capture'},quickDesc:{ja:'v15 HTML / SingleFile HTML / JSONを読み込み、選択した会話をライブラリへ保存。',en:'Import v15 HTML / SingleFile HTML / JSON and save selected conversations to the library.'},
+  verifiedTitle:{ja:'完成保存',en:'Verified Archive'},verifiedDesc:{ja:'OpenAI Exportを内部検査し、独立キャプチャとの本文・分岐差分まで照合。',en:'Inspect an OpenAI Export and compare body / branch differences against an independent capture.'},
+  importSource:{ja:'資料を読み込む',en:'Import source'},tapOrDrop:{ja:'タップして選択 · Mac/PCはドラッグ＆ドロップ',en:'Tap to choose · drag & drop on Mac/PC'},
+  saveExport:{ja:'保存・出力',en:'Save / Export'},saveLibrary:{ja:'Library',en:'Library'},saveLibraryDesc:{ja:'Webアプリ内へ保存',en:'Save in web app'},verification:{ja:'検証',en:'Verification'},dropArchive:{ja:'ライブラリからドロップ',en:'Drop from Library'},
+  integrity:{ja:'内部完全性',en:'Internal integrity'},conversation:{ja:'会話',en:'Conversation'},compare:{ja:'本文・枝分かれ照合',en:'Body / branch comparison'},compareAction:{ja:'照合する',en:'Compare'},
+  libraryHint:{ja:'会話をタップして開く · 検証時はA/Bへドラッグ',en:'Tap to open · drag to A/B for verification'},refresh:{ja:'更新',en:'Refresh'}
+};
+function savedUiLanguage(){try{return localStorage.getItem('ada-ui-language')||'ja';}catch{return'ja';}}
+function uiText(key){
+  const pair=UI_TEXT[key];if(!pair)return key;
+  if(state.uiLanguage==='en')return pair.en;
+  if(state.uiLanguage==='bi')return `${pair.ja} / ${pair.en}`;
+  return pair.ja;
+}
+function applyUiLanguage(){
+  document.documentElement.lang=state.uiLanguage==='en'?'en':'ja';
+  document.querySelectorAll('[data-i18n]').forEach(el=>{const key=el.dataset.i18n;if(UI_TEXT[key])el.textContent=uiText(key);});
+  document.querySelectorAll('[data-ui-language]').forEach(btn=>btn.classList.toggle('active',btn.dataset.uiLanguage===state.uiLanguage));
+  setLibrarySearchMode(state.librarySearchMode,true);
+}
+function setUiLanguage(lang){
+  state.uiLanguage=['ja','en','bi'].includes(lang)?lang:'ja';
+  try{localStorage.setItem('ada-ui-language',state.uiLanguage);}catch{}
+  applyUiLanguage();renderLibrary();
+}
+function toggleHomePopover(id){
+  const target=$(id);if(!target)return;
+  for(const other of ['appSettingsPanel','appInfoPanel'])if(other!==id&&$(other))$(other).hidden=true;
+  target.hidden=!target.hidden;
+}
+function setLibrarySearchMode(mode,skipRender=false){
+  state.librarySearchMode=mode==='full'?'full':'title';
+  document.querySelectorAll('[data-library-search-mode]').forEach(btn=>btn.classList.toggle('active',btn.dataset.librarySearchMode===state.librarySearchMode));
+  const input=$('librarySearch');if(input)input.placeholder=state.librarySearchMode==='full'?uiText('libraryFullSearchPlaceholder'):uiText('librarySearchPlaceholder');
+  if(!skipRender&&$('libraryList'))renderLibrary();
+}
+function openFirstLibrarySearchResult(){const first=state.librarySearchResults?.[0];if(first?.id)openArchive(first.id);}
+
+setup();
 
 function setMode(mode){
   state.mode=mode;
@@ -181,8 +251,9 @@ function renderSources(){
   if(!state.sources.length){box.className='source-list empty-state';box.textContent='まだ資料は読み込まれていません。';return;}
   box.className='source-list';
   box.innerHTML=state.sources.map(s=>{
-    const err=(s.integrity||[]).reduce((n,r)=>n+r.errors,0), warn=(s.integrity||[]).reduce((n,r)=>n+r.warnings,0);
-    const badge=err?'<span class="badge bad">FAIL</span>':warn?'<span class="badge warn">PASS + WARN</span>':'<span class="badge ok">PASS</span>';
+    const reports=(s.integrity||[]).filter(Boolean);
+    const err=reports.reduce((n,r)=>n+(r.errors||0),0), warn=reports.reduce((n,r)=>n+(r.warnings||0),0);
+    const badge=!reports.length?'<span class="badge neutral">NO REPORT</span>':err?'<span class="badge bad">FAIL</span>':warn?'<span class="badge warn">PASS + WARN</span>':'<span class="badge ok">PASS</span>';
     const size=Number.isFinite(s.rawSize)?`${(s.rawSize/1024/1024).toFixed(2)} MB`:'library';
     const hash=s.rawFileHash?` · SHA-256 ${s.rawFileHash.slice(0,14)}…`:'';
     return `<div class="source-row"><div><strong>${escapeHtml(s.name)}</strong><small>${kindLabel(s.kind)} · ${size}${hash}</small><div class="source-meta"><span class="chip">${s.conversations.length} conversations</span><span class="chip">${s.entryNames?.length||1} source</span>${state.autoMatches.some(m=>m.a.source===s||m.b.source===s)?'<span class="chip">auto matched</span>':''}</div></div>${badge}</div>`;
@@ -306,7 +377,7 @@ function serializeProject(includeRaw=false){
 }
 function serializeConv(c,includeRaw){
   const nodes=Object.fromEntries(Object.entries(c.nodes||{}).map(([id,n])=>[id,includeRaw?n:{...n,raw:undefined}]));
-  return {id:c.id,title:c.title,createTime:c.createTime,updateTime:c.updateTime,currentNode:c.currentNode,sourceFormat:c.sourceFormat,sourceName:c.sourceName,rootIds:c.rootIds,nodes,htmlFlavor:c.htmlFlavor??null,rawOriginalText:c.rawOriginalText??null,previewImages:c.previewImages??null,...(includeRaw?{rawObject:c.rawObject,htmlRaw:c.htmlRaw,visualHtml:c.visualHtml??null}: {})};
+  return {id:c.id,title:c.title,createTime:c.createTime,updateTime:c.updateTime,currentNode:c.currentNode,sourceFormat:c.sourceFormat,sourceName:c.sourceName,rootIds:c.rootIds,nodes,htmlFlavor:c.htmlFlavor??null,rawOriginalText:c.rawOriginalText??null,previewImages:c.previewImages??null,overview:c.overview??null,keywords:c.keywords??null,aiAnnotations:c.aiAnnotations??null,...(includeRaw?{rawObject:c.rawObject,htmlRaw:c.htmlRaw,visualHtml:c.visualHtml??null}: {})};
 }
 
 async function exportArchive(){
@@ -387,19 +458,85 @@ async function migrateLegacyProjects(){
   try{localStorage.setItem(key,'1');}catch{}
 }
 
+function archiveSearchText(archive){
+  if(archive._searchTextCache)return archive._searchTextCache;
+  const nodes=Object.values(archive.conversation?.nodes||{});
+  const text=nodes.map(n=>String(n.text||'')).join('\n').normalize('NFKC');
+  archive._searchTextCache=text;return text;
+}
+function countLiteralMatches(haystack,needle){
+  if(!needle)return 0;const h=haystack.toLocaleLowerCase(),n=needle.toLocaleLowerCase();let count=0,pos=0;
+  while((pos=h.indexOf(n,pos))!==-1){count++;pos+=Math.max(1,n.length);}return count;
+}
+function snippetAround(text,query,maxLen=118){
+  if(!text||!query)return'';const lower=text.toLocaleLowerCase(),q=query.toLocaleLowerCase();const pos=lower.indexOf(q);if(pos<0)return'';
+  const start=Math.max(0,pos-Math.floor((maxLen-query.length)/2));const end=Math.min(text.length,start+maxLen);
+  return `${start>0?'…':''}${text.slice(start,end).replace(/\s+/g,' ').trim()}${end<text.length?'…':''}`;
+}
+function fullTextSnippets(archive,query,limit=2){
+  if(!query)return[];const out=[];
+  for(const node of Object.values(archive.conversation?.nodes||{})){
+    const text=String(node.text||'');if(!text.toLocaleLowerCase().includes(query.toLocaleLowerCase()))continue;
+    const snippet=snippetAround(text,query);if(snippet)out.push({role:node.role||'unknown',text:snippet});if(out.length>=limit)break;
+  }
+  return out;
+}
+function highlightLibrarySnippet(text,query){
+  const safe=escapeHtml(text);if(!query)return safe;
+  const escaped=String(query).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  try{return safe.replace(new RegExp(escaped,'gi'),m=>`<mark>${m}</mark>`);}catch{return safe;}
+}
+function librarySearchRecord(archive,query,mode){
+  if(!query)return{match:true,hits:0,snippets:[]};
+  if(mode==='full'){
+    const text=archiveSearchText(archive);const hits=countLiteralMatches(text,query);
+    return{match:hits>0,hits,snippets:hits?fullTextSnippets(archive,query):[]};
+  }
+  const hay=`${archive.title||''} ${archive.source?.name||''} ${archive.status||''}`;
+  return{match:hay.toLocaleLowerCase().includes(query.toLocaleLowerCase()),hits:0,snippets:[]};
+}
 function renderLibrary(){
   const list=$('libraryList');
-  const q=($('librarySearch').value||'').trim().toLowerCase();
-  const items=state.library.filter(a=>!q||`${a.title||''} ${a.source?.name||''} ${a.status||''}`.toLowerCase().includes(q));
+  const q=($('librarySearch').value||'').trim();
+  const records=state.library.map(a=>({archive:a,...librarySearchRecord(a,q,state.librarySearchMode)})).filter(x=>x.match);
+  state.librarySearchResults=records.map(x=>x.archive);
   $('libraryCount').textContent=String(state.library.length);
-  if(!state.library.length){list.className='library-list empty-state';list.textContent='まだ保存済み会話はありません。資料を読み込み、会話を選んで「ライブラリへ保存」を押してください。';return;}
-  if(!items.length){list.className='library-list empty-state';list.textContent='一致する保存済み会話はありません。';return;}
+  if($('librarySearchCount'))$('librarySearchCount').textContent=q?`${records.length} / ${state.library.length}`:`${state.library.length}`;
+  if(!state.library.length){list.className='library-list empty-state';list.textContent=state.uiLanguage==='en'?'No saved conversations yet.':'まだ保存済み会話はありません。資料を読み込み、会話を選んで「ライブラリへ保存」を押してください。';return;}
+  if(!records.length){list.className='library-list empty-state';list.textContent=state.uiLanguage==='en'?'No matching conversations.':'一致する保存済み会話はありません。';return;}
   list.className='library-list';
-  list.innerHTML=items.map(a=>{
-    const stats=a.stats||deriveStats(a.conversation||{});
-    const effectiveStatus=storedArchiveStatus(a);const cls=statusClass(effectiveStatus);
-    return `<button class="library-card" data-open-archive="${escapeHtml(a.id)}"><div class="library-card-main"><strong>${escapeHtml(a.title||'(無題)')}</strong><small>${escapeHtml(a.source?.name||'Local Library')} · ${formatDate(a.updatedAt||a.savedAt)}</small><div class="source-meta"><span class="chip">${stats.user||0} user</span><span class="chip">${stats.assistant||0} assistant</span><span class="chip">${stats.branchPoints||0} branches</span></div></div><span class="badge ${cls}">${escapeHtml(shortStatus(effectiveStatus))}</span></button>`;
+  list.innerHTML=records.map(({archive:a,hits,snippets})=>{
+    const stats=a.stats||deriveStats(a.conversation||{});const effectiveStatus=storedArchiveStatus(a);const cls=statusClass(effectiveStatus);
+    const hitLine=state.librarySearchMode==='full'&&q?`<span class="library-hit-count">${hits} hit${hits===1?'':'s'}</span>`:'';
+    const snippetHtml=snippets.length?`<div class="library-snippets">${snippets.map(x=>`<div><b>${escapeHtml(x.role==='assistant'?'ChatGPT':x.role==='user'?'User':x.role)}</b>${highlightLibrarySnippet(x.text,q)}</div>`).join('')}</div>`:'';
+    return `<article class="library-card" draggable="true" data-archive-id="${escapeHtml(a.id)}">
+      <button class="library-card-open" data-open-archive="${escapeHtml(a.id)}" type="button">
+        <span class="library-card-main"><strong>${escapeHtml(a.title||'(無題)')}</strong><small>${escapeHtml(a.source?.name||'Local Library')} · ${formatDate(a.updatedAt||a.savedAt)}</small><span class="library-card-stats">${stats.user||0} User · ${stats.assistant||0} ChatGPT · ${stats.branchPoints||0} Branches ${a.graphHash?`· ${escapeHtml(a.graphHash.slice(0,10))}…`:''}</span></span>
+        <span class="library-card-side"><span class="badge ${cls}">${escapeHtml(shortStatus(effectiveStatus))}</span>${hitLine}</span>
+      </button>
+      ${snippetHtml}
+      <div class="library-quick-actions"><button type="button" data-assign-archive="A" data-archive-id="${escapeHtml(a.id)}" aria-label="検証資料Aへ">A</button><button type="button" data-assign-archive="B" data-archive-id="${escapeHtml(a.id)}" aria-label="検証資料Bへ">B</button></div>
+    </article>`;
   }).join('');
+}
+
+
+async function assignArchiveToVerification(archiveId,target){
+  try{
+    const archive=await getArchive(archiveId);if(!archive){toast('保存済み会話が見つかりません。');return;}
+    let sourceIndex=state.sources.findIndex(s=>s._archiveId===archive.id);
+    if(sourceIndex<0){
+      const conv=deepClone(archive.conversation);
+      const source={id:stableId('source'),_archiveId:archive.id,kind:'library-archive',name:`Library · ${archive.title}`,importedAt:new Date().toISOString(),rawFileHash:archive.source?.rawFileHash||null,rawSize:archive.source?.rawSize||0,entryNames:['local-library'],conversations:[conv],integrity:[archive.report||null],sourceFile:null};
+      state.sources.push(source);sourceIndex=state.sources.length-1;renderSources();updateSelectors();
+    }
+    const key=`${sourceIndex}:0`;const selectId=target==='B'?'compareB':'compareA';
+    $(selectId).value=key;if(!$('inspectSelect').value||target==='A')$('inspectSelect').value=key;
+    const slot=$(target==='B'?'compareDropB':'compareDropA');
+    if(slot){slot.classList.add('assigned');slot.querySelector('small').textContent=archive.title||'(無題)';}
+    $('verificationWorkbench').open=true;renderIntegrity();updateArchiveStatus();
+    toast(`検証資料${target}に設定しました。`);
+  }catch(e){toast(`検証資料の読み込みに失敗: ${e.message}`);console.error(e);}
 }
 
 async function openArchive(id){
@@ -455,40 +592,53 @@ function deriveLocalKeywords(conv,limit=12){
   const nodes=Object.values(conv?.nodes||{});
   if(!nodes.length)return[];
   const stop=new Set([
-    'これ','それ','あれ','この','その','あの','ここ','そこ','ため','よう','もの','こと','ところ','とき','です','ます','でした','ました','いる','ある','なる','する','して','した','され','から','まで','より','ので','のに','なら','では','でも','また','そして','ただ','という','として','について','ような','ように','かなり','もっと','少し','今回','今後','現在','以前','自分','私','あなた','ユーザー','chatgpt','assistant','user','考える','思う','言う','見る','分かる','わかる','使う','出る','入る','持つ','the','and','that','this','with','from','have','has','for','not','are','was','were','will','would','can','could','into','about','your','you','our','but','its','than','then'
+    'これ','それ','あれ','この','その','あの','ここ','そこ','どこ','どれ','ため','よう','もの','こと','ところ','とき','です','ます','でした','ました','いる','ある','なる','する','して','した','され','から','まで','より','ので','のに','なら','では','でも','また','そして','ただ','という','として','について','ような','ように','かなり','もっと','少し','今回','今後','現在','以前','自分','私','あなた','こちら','そこから','そのもの','つまり','だから','なので','だけ','あり','なし','ない','なく','って','てい','せん','できる','でき','できて','なっ','なり','よく','本当','普通','場合','感じ','思い','同じ','面白い','強い','必要','重要','可能性','近い','時間','人間','情報','考える','思う','言う','見る','分かる','わかる','使う','出る','入る','持つ','ユーザー','chatgpt','assistant','user',
+    'the','and','that','this','with','from','have','has','for','not','are','was','were','will','would','can','could','into','about','your','you','our','but','its','than','then','also','just'
   ]);
   const freq=new Map(),spread=new Map(),roles=new Map();
   let segmenter=null;try{segmenter=new Intl.Segmenter('ja',{granularity:'word'});}catch{}
+  const isHiraganaOnly=t=>/^[\p{Script=Hiragana}ー]+$/u.test(t);
+  const quality=t=>{
+    let q=0;if(/[\p{Script=Han}]/u.test(t))q+=1.25;if(/[\p{Script=Katakana}]/u.test(t))q+=1.05;if(/[A-Za-z]/.test(t))q+=.85;if(t.length>=3)q+=.35;if(t.length>=5)q+=.25;return q;
+  };
   const tokenize=text=>{
     const norm=String(text||'').normalize('NFKC').toLowerCase();
     if(segmenter){
       const raw=[...segmenter.segment(norm)].filter(x=>x.isWordLike).map(x=>x.segment);
       const out=[];
       for(const part of raw){
-        if(out.length&&['性','的','化','感','力','論','学','観'].includes(part))out[out.length-1]+=part;
+        if(out.length&&['性','的','化','感','力','論','学','観','型','系'].includes(part))out[out.length-1]+=part;
         else out.push(part);
       }
       return out;
     }
     return norm.match(/[\p{L}\p{N}ー々]{2,}/gu)||[];
   };
-  nodes.forEach((n,idx)=>{
+  nodes.forEach(n=>{
     const seen=new Set();
     for(const raw of tokenize(n.text||'')){
       const token=raw.replace(/^[\s\p{P}\p{S}]+|[\s\p{P}\p{S}]+$/gu,'');
-      if(token.length<2||token.length>28||/^\d+(?:[.,]\d+)*$/.test(token)||stop.has(token))continue;
+      if(token.length<2||token.length>28||/^\d+(?:[.,]\d+)*$/.test(token)||stop.has(token)||isHiraganaOnly(token))continue;
+      if(!/[\p{Script=Han}\p{Script=Katakana}A-Za-z]/u.test(token))continue;
       freq.set(token,(freq.get(token)||0)+1);
       if(!seen.has(token)){spread.set(token,(spread.get(token)||0)+1);seen.add(token);}
       if(!roles.has(token))roles.set(token,new Set());roles.get(token).add(n.role||'unknown');
     }
   });
+  const title=String(conv.title||'').normalize('NFKC').toLowerCase();
+  const corpus=state.library?.length?state.library.map(a=>archiveSearchText(a).toLocaleLowerCase()):[];
   return [...freq.keys()].map(token=>{
     const f=freq.get(token)||0,d=spread.get(token)||0,r=roles.get(token)?.size||1;
-    const lengthBoost=token.length>=3?1.12:1;
-    const score=(Math.log2(f+1)*1.7+Math.log2(d+1)*1.2+(r>1?.45:0))*lengthBoost;
+    const df=corpus.length?corpus.reduce((n,doc)=>n+(doc.includes(token)?1:0),0):0;
+    const idf=corpus.length?Math.log((corpus.length+1)/(df+1))+1:1;
+    const titleBoost=title.includes(token)?4.0:0;
+    const score=(Math.log2(f+1)*1.9+Math.log2(d+1)*1.35+(r>1?.6:0)+quality(token)+titleBoost)*idf;
     return {token,score,f,d};
-  }).filter(x=>x.f>=2||x.d>=2).sort((a,b)=>b.score-a.score||b.d-a.d||b.f-a.f||a.token.localeCompare(b.token,'ja')).slice(0,limit).map(x=>x.token);
+  }).filter(x=>x.f>=2||x.d>=2||title.includes(x.token))
+    .sort((a,b)=>b.score-a.score||b.d-a.d||b.f-a.f||a.token.localeCompare(b.token,'ja'))
+    .slice(0,limit).map(x=>({ai:'AI',ui:'UI',iq:'IQ',api:'API',html:'HTML',json:'JSON',svg:'SVG',css:'CSS',javascript:'JavaScript'}[x.token]||x.token));
 }
+
 function toggleViewerOverview(){
   const p=$('viewerOverviewPanel');p.hidden=!p.hidden;
   $('viewerOverviewBtn').textContent=`${p.hidden?'▸':'▾'} Overview & Key Concepts`;
