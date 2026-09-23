@@ -1,7 +1,20 @@
-# AI Dialogue Archiver Web — v0.5.5
+# AI Dialogue Archiver Web — v0.5.6
 
 AI対話をブラウザ内で読み込み、保存・閲覧・内部整合性検査・本文/枝分かれ照合・Archive Bundle / v15 HTML出力まで行うローカルファーストWebアプリです。
 
+
+
+## v0.5.6 の中心変更
+
+- 初期画面を本文ビューアと同じタイポグラフィ・操作列寸法へ統一。初期画面全体を固定し、右側Libraryのみスクロール可能に変更。
+- 初期上段を「保存/出力選択・黒テッセラクト実行・Quick/Verify・検索・Title/Full Text」に再構成。
+- 左列をChatGPTカード系の「資料を読み込む / 検証」、右列をUserカード系の「保存済み会話」に整理。A/B検証枠は縦並び。
+- 設定アイコンをテーマ点と同径の7つの外接円に変更。UI言語は日本語 / Englishの2択のみ。
+- 黒ボタンの展開矢印を廃止し、Image Promptsも同じ固定幅へ統一。Preview / Transcript / Title / Full Textは最長語基準の固定幅。
+- Overviewを本文上の数行パネルから、Summary上段 + Key Concepts/Keywords下段の固定1画面へ変更。モーヴ系の低彩度枠と凹型の立体感を採用。
+- Overview表示中に本文検索を実行するとOverviewを閉じて該当本文へ移動。
+- Previewに予備黒ボタンと独立したPrompt検索を追加。
+- APP_VERSION / Service Worker cacheをv0.5.6へ更新。
 
 ## v0.5.5 の中心変更
 

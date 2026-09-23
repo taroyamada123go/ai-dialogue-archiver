@@ -16,15 +16,13 @@
 <body>
   <header class="topbar home-topbar">
     <div class="topbar-inner">
-      <div class="home-brand-line">
+      <div class="viewer-heading home-heading">
         <strong class="home-app-title">AI Dialogue Archiver</strong>
-        <span class="home-app-subtitle" data-i18n="homeSubtitle">会話を保存・検証・閲覧する。</span>
       </div>
-      <div class="top-actions home-top-actions">
-        <span id="runtimeBadge" class="badge neutral">LOCAL</span>
-        <button id="appThemeBtn" class="app-theme-button" aria-label="ダークモードへ"><span class="app-theme-dot" aria-hidden="true"></span></button>
-        <button id="appSettingsBtn" class="app-icon-button app-settings-button" aria-label="設定"><span class="settings-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
-        <button id="appMoreBtn" class="app-icon-button app-more-button" aria-label="このアプリについて"><span aria-hidden="true">···</span></button>
+      <div class="viewer-top-actions home-top-actions">
+        <button id="appThemeBtn" class="viewer-surface-icon app-theme-button" aria-label="ダークモードへ"><span class="app-theme-dot" aria-hidden="true"></span></button>
+        <button id="appSettingsBtn" class="viewer-surface-icon app-settings-button" aria-label="設定"><span class="settings-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
+        <button id="appMoreBtn" class="viewer-surface-icon viewer-more-icon app-more-button" aria-label="このアプリについて"><span aria-hidden="true">···</span></button>
         <button id="installBtn" class="ghost" hidden>ホーム画面に追加</button>
       </div>
     </div>
@@ -35,7 +33,6 @@
         <div class="settings-segmented" role="group" aria-label="UI Language">
           <button data-ui-language="ja">日本語</button>
           <button data-ui-language="en">English</button>
-          <button data-ui-language="bi">日本語＋English</button>
         </div>
       </div>
     </div>
@@ -44,44 +41,42 @@
       <div><strong data-i18n="localProcessing">端末内処理</strong><span data-i18n="localProcessingDesc">会話本文はブラウザ内で処理。外部リソースは自動取得しません。</span></div>
       <div><strong data-i18n="library">ライブラリ</strong><span data-i18n="libraryDesc">読み込んだ会話はこのWebアプリ内に保存し、そのまま検索・閲覧できます。</span></div>
       <div><strong data-i18n="storageLimits">保存方式と限界</strong><span data-i18n="storageLimitsDesc">IndexedDB / OPFSを使用。重要な会話はArchive Bundle / v15 HTMLも残してください。</span></div>
+      <div><strong>Storage</strong><span id="runtimeBadge" class="home-runtime-status">LOCAL</span></div>
     </div>
   </header>
 
+  <span id="archiveStatus" hidden></span>
   <main class="shell home-shell">
-    <section class="home-library-header" aria-label="ライブラリ検索">
-      <div class="home-black-heading" data-i18n="savedConversations">保存済み会話</div>
-      <span class="home-control-spacer"></span>
-      <div class="library-search-mode" role="group" aria-label="検索範囲">
-        <button data-library-search-mode="title" class="active" data-i18n="titleSearch">Title</button>
-        <button data-library-search-mode="full" data-i18n="fullTextSearch">Full Text</button>
+    <section class="home-library-header viewer-control-row" aria-label="ライブラリ操作">
+      <div id="homeExportCtl" class="home-dropdown-control">
+        <button id="homeExportTrigger" class="viewer-black-control home-primary-black" type="button"><span id="homeExportLabel">ライブラリへ保存</span></button>
+        <div id="homeExportMenu" class="viewer-layer-menu home-dropdown-menu">
+          <button type="button" data-export-action="library"><span data-i18n="saveToLibrary">ライブラリへ保存</span><span>✓</span></button>
+          <button type="button" data-export-action="bundle"><span>Archive Bundle</span><span></span></button>
+          <button type="button" data-export-action="v15"><span>v15 HTML</span><span></span></button>
+          <button type="button" data-export-action="report"><span>Verification Report</span><span></span></button>
+        </div>
       </div>
-      <span id="librarySearchCount" class="home-search-count">0 / 0</span>
-      <div class="home-search-box">
+      <span class="viewer-control-spacer home-control-spacer"><button id="homeExportExecuteBtn" class="viewer-black-control home-tesseract-button" type="button" aria-label="選択した保存・出力を実行"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7.2h9.8V17H5zM9.2 3h9.8v9.8H9.2zM5 7.2 9.2 3M14.8 7.2 19 3M14.8 17l4.2-4.2M5 17l4.2-4.2"/></svg></button></span>
+      <div id="homeModeCtl" class="home-dropdown-control">
+        <button id="homeModeTrigger" class="viewer-black-control home-primary-black" type="button"><span id="homeModeLabel">手軽に保存</span></button>
+        <div id="homeModeMenu" class="viewer-layer-menu home-dropdown-menu">
+          <button type="button" data-home-mode="quick"><span data-i18n="quickCompact">手軽に保存</span><span>✓</span></button>
+          <button type="button" data-home-mode="verified"><span data-i18n="verifyCompact">完成保存</span><span></span></button>
+        </div>
+      </div>
+      <span id="librarySearchCount" class="viewer-search-count home-search-count">0 / 0</span>
+      <div class="viewer-search-box home-search-box">
         <input id="librarySearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="タイトル・保存元を検索" data-i18n-placeholder="librarySearchPlaceholder">
-        <button id="librarySearchGo" class="home-search-go" type="button" aria-label="最初の検索結果を開く">→</button>
+        <button id="librarySearchGo" class="viewer-search-go home-search-go" type="button" aria-label="最初の検索結果を開く">→</button>
       </div>
+      <button id="librarySearchModeBtn" class="viewer-preview-button home-search-mode-button" type="button">Title</button>
     </section>
 
     <section class="home-workspace">
       <aside class="home-operations-column">
-        <section class="mode-grid home-mode-grid compact-mode-stack" aria-label="保存モード">
-          <button class="mode-card active" data-mode="quick">
-            <span class="mode-tag">QUICK</span>
-            <strong data-i18n="quickTitle">手軽に保存</strong>
-            <small data-i18n="quickDesc">v15 HTML / SingleFile HTML / JSONを読み込み、選択した会話をライブラリへ保存。</small>
-          </button>
-          <button class="mode-card" data-mode="verified">
-            <span class="mode-tag">VERIFY</span>
-            <strong data-i18n="verifiedTitle">完成保存</strong>
-            <small data-i18n="verifiedDesc">OpenAI Exportを内部検査し、独立キャプチャとの本文・分岐差分まで照合。</small>
-          </button>
-        </section>
-
-        <section class="panel import-panel home-panel home-import-panel">
-          <div class="panel-head compact-panel-head">
-            <div><span class="section-no">01</span><h2 data-i18n="importSource">資料を読み込む</h2></div>
-            <span id="modeDescription" class="badge">Quick Capture</span>
-          </div>
+        <section class="panel import-panel home-panel home-import-panel home-assistant-card">
+          <div class="home-role-title assistant-role-title" data-i18n="importSource">資料を読み込む</div>
           <label id="dropZone" class="drop-zone compact-drop-zone">
             <input id="fileInput" type="file" multiple accept=".zip,.json,.html,.htm">
             <div class="drop-icon">＋</div>
@@ -91,17 +86,7 @@
           <div id="sourceList" class="source-list empty-state compact-source-list">まだ資料は読み込まれていません。</div>
         </section>
 
-        <section class="panel home-panel home-output-panel">
-          <div class="panel-head compact-panel-head"><div><span class="section-no">02</span><h2 data-i18n="saveExport">保存・出力</h2></div><span id="archiveStatus" class="badge neutral">NO ARCHIVE</span></div>
-          <div class="compact-action-grid">
-            <button id="saveLocalBtn" class="action-card compact-action"><strong data-i18n="saveLibrary">Library</strong><small data-i18n="saveLibraryDesc">Webアプリ内へ保存</small></button>
-            <button id="exportArchiveBtn" class="action-card compact-action"><strong>Bundle</strong><small>Archive ZIP</small></button>
-            <button id="exportV15Btn" class="action-card compact-action"><strong>v15</strong><small>HTML</small></button>
-            <button id="exportReportBtn" class="action-card compact-action"><strong>Report</strong><small>JSON</small></button>
-          </div>
-        </section>
-
-        <details id="verificationWorkbench" class="advanced-workbench verification-workbench">
+        <details id="verificationWorkbench" class="advanced-workbench verification-workbench home-assistant-card">
           <summary data-i18n="verification">検証</summary>
           <div class="advanced-workbench-body verification-body">
             <div class="verification-drop-row" aria-label="ライブラリから検証資料を選択">
@@ -109,14 +94,14 @@
               <button id="compareDropB" class="verification-drop-slot" type="button"><span>B</span><small data-i18n="dropArchive">ライブラリからドロップ</small></button>
             </div>
             <section class="panel compact-verification-panel">
-              <div class="panel-head"><div><span class="section-no">03</span><h2 data-i18n="integrity">内部完全性</h2></div><span class="muted">deterministic</span></div>
+              <div class="panel-head"><div><h2 data-i18n="integrity">内部完全性</h2></div><span class="muted">deterministic</span></div>
               <label class="field-label" for="inspectSelect" data-i18n="conversation">会話</label>
               <select id="inspectSelect"></select>
               <div id="integritySummary" class="integrity-summary empty-state">会話を読み込むと検査結果が表示されます。</div>
               <div id="issueList" class="issue-list empty-state">エラー・警告の詳細</div>
             </section>
             <section class="panel compact-verification-panel">
-              <div class="panel-head"><div><span class="section-no">04</span><h2 data-i18n="compare">本文・枝分かれ照合</h2></div><span class="muted">ID-independent</span></div>
+              <div class="panel-head"><div><h2 data-i18n="compare">本文・枝分かれ照合</h2></div><span class="muted">ID-independent</span></div>
               <div class="compare-controls compact-compare-controls">
                 <div><label class="field-label">A</label><select id="compareA"></select></div>
                 <div><label class="field-label">B</label><select id="compareB"></select></div>
@@ -128,7 +113,8 @@
         </details>
       </aside>
 
-      <section class="panel library-panel home-panel home-library-column" id="libraryPanel">
+      <section class="panel library-panel home-panel home-library-column home-user-card" id="libraryPanel">
+        <div class="home-role-title user-role-title" data-i18n="savedConversations">保存済み会話</div>
         <div class="library-column-head">
           <span class="muted" data-i18n="libraryHint">会話をタップして開く · 検証時はA/Bへドラッグ</span>
           <div><span id="libraryCount" class="badge neutral">0</span><button id="refreshLibraryBtn" class="ghost" data-i18n="refresh">更新</button></div>
@@ -137,7 +123,7 @@
       </section>
     </section>
   </main>
-  <footer>AI Dialogue Archiver · local-first · no AI required for verification</footer>
+  <footer class="home-footer">AI Dialogue Archiver · local-first · no AI required for verification</footer>
   <div id="toast" class="toast" hidden></div>
 
   <section id="libraryViewer" class="library-viewer" hidden aria-modal="true" role="dialog">
@@ -160,10 +146,10 @@
         </div>
 
         <div class="viewer-control-row">
-          <button id="viewerOverviewBtn" class="viewer-black-control viewer-overview-control">▸ Overview &amp; Key Concepts</button>
+          <button id="viewerOverviewBtn" class="viewer-black-control viewer-overview-control">Overview &amp; Key Concepts</button>
           <span class="viewer-control-spacer"></span>
           <div id="viewerLayerCtl" class="viewer-layer-control">
-            <button id="viewerLayerTrigger" class="viewer-black-control viewer-layer-trigger"><span class="viewer-layer-caret">▸</span><span id="viewerLayerLabel">Visual Replica</span></button>
+            <button id="viewerLayerTrigger" class="viewer-black-control viewer-layer-trigger"><span id="viewerLayerLabel">Visual Replica</span></button>
             <div id="viewerLayerMenu" class="viewer-layer-menu">
               <button data-viewer-layer="visual">Visual Replica <span>✓</span></button>
               <button data-viewer-layer="semantic">Semantic Transcript <span></span></button>
@@ -179,8 +165,9 @@
         </div>
 
         <div id="viewerHistoryPanel" class="viewer-header-panel viewer-history-panel" hidden></div>
-        <div id="viewerOverviewPanel" class="viewer-header-panel viewer-overview-panel" hidden></div>
       </header>
+
+      <section id="viewerOverviewPanel" class="viewer-overview-panel viewer-meaning-space" hidden></section>
 
       <div id="viewerActions" class="viewer-actions" hidden>
         <button id="viewerLoadBtn" class="ghost">検証画面へ読み込む</button>
@@ -215,7 +202,13 @@
             <button id="viewerImageIndexBtn" class="viewer-image-index-trigger"><strong>Image Index:</strong> <span id="viewerImageCount">0 images</span></button>
           </div>
           <div class="viewer-preview-nav-row">
-            <button id="viewerImagePromptsBtn" class="viewer-black-control">▸ Image Prompts</button>
+            <button id="viewerImagePromptsBtn" class="viewer-black-control viewer-prompt-primary">Image Prompts</button>
+            <button id="viewerPromptReservedBtn" class="viewer-black-control viewer-prompt-reserved" type="button" aria-label="予約ボタン">&nbsp;</button>
+            <span id="viewerPromptMatchCount" class="viewer-search-count">0 / 0</span>
+            <div class="viewer-search-box viewer-prompt-search-box">
+              <input id="viewerPromptSearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="画像プロンプトを検索">
+              <button id="viewerPromptSearchGo" class="viewer-search-go" type="button" aria-label="次のプロンプト検索結果">→</button>
+            </div>
             <button id="viewerTranscriptBtn" class="viewer-preview-button">Transcript</button>
           </div>
           <div id="viewerImagePromptsPanel" class="viewer-preview-prompts-panel" hidden></div>

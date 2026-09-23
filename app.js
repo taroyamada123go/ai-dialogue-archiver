@@ -11,7 +11,7 @@ import { protectFragmentForDisplay, externalUrlFromGate } from './src/network-po
 
 const state={
   mode:'quick',sources:[],comparison:null,autoMatches:[],installPrompt:null,
-  library:[],librarySearchMode:'title',librarySearchResults:[],uiLanguage:'ja',viewerArchive:null,viewerCurrentNode:null,viewerLayer:'visual',viewerMatches:[],viewerMatchIndex:-1,viewerImages:[],viewerImageMetaVisible:true,viewerTranscriptScrollTop:0,viewerSearchOrigin:null,viewerLastSearchQuery:'',viewerSearchSnapshots:null,
+  library:[],librarySearchMode:'title',librarySearchResults:[],uiLanguage:'ja',homeExportAction:'library',viewerArchive:null,viewerCurrentNode:null,viewerLayer:'visual',viewerMatches:[],viewerMatchIndex:-1,viewerImages:[],viewerImageMetaVisible:true,viewerTranscriptScrollTop:0,viewerSearchOrigin:null,viewerLastSearchQuery:'',viewerSearchSnapshots:null,viewerPromptMatches:[],viewerPromptMatchIndex:-1,viewerPromptSearchSnapshots:null,viewerPromptLastSearchQuery:'',
 };
 const $=id=>document.getElementById(id);
 
@@ -24,8 +24,12 @@ function setup(){
   $('appSettingsBtn')?.addEventListener('click',e=>{e.stopPropagation();toggleHomePopover('appSettingsPanel');});
   $('appMoreBtn')?.addEventListener('click',e=>{e.stopPropagation();toggleHomePopover('appInfoPanel');});
   document.querySelectorAll('[data-ui-language]').forEach(btn=>btn.addEventListener('click',()=>setUiLanguage(btn.dataset.uiLanguage)));
-  document.querySelectorAll('[data-library-search-mode]').forEach(btn=>btn.addEventListener('click',()=>setLibrarySearchMode(btn.dataset.librarySearchMode)));
-  document.querySelectorAll('[data-mode]').forEach(btn=>btn.addEventListener('click',()=>setMode(btn.dataset.mode)));
+  $('librarySearchModeBtn')?.addEventListener('click',()=>setLibrarySearchMode(state.librarySearchMode==='title'?'full':'title'));
+  $('homeExportTrigger')?.addEventListener('click',e=>{e.stopPropagation();$('homeExportCtl').classList.toggle('open');$('homeModeCtl').classList.remove('open');});
+  document.querySelectorAll('[data-export-action]').forEach(btn=>btn.addEventListener('click',()=>setHomeExportAction(btn.dataset.exportAction)));
+  $('homeExportExecuteBtn')?.addEventListener('click',executeHomeExportAction);
+  $('homeModeTrigger')?.addEventListener('click',e=>{e.stopPropagation();$('homeModeCtl').classList.toggle('open');$('homeExportCtl').classList.remove('open');});
+  document.querySelectorAll('[data-home-mode]').forEach(btn=>btn.addEventListener('click',()=>{setMode(btn.dataset.homeMode);$('homeModeCtl').classList.remove('open');}));
   $('fileInput').addEventListener('change',e=>handleFiles([...e.target.files]));
   const dz=$('dropZone');
   ['dragenter','dragover'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add('drag')}));
@@ -33,10 +37,6 @@ function setup(){
   dz.addEventListener('drop',e=>handleFiles([...e.dataTransfer.files]));
   $('inspectSelect').addEventListener('change',renderIntegrity);
   $('compareBtn').addEventListener('click',runCompare);
-  $('saveLocalBtn').addEventListener('click',saveLocal);
-  $('exportArchiveBtn').addEventListener('click',exportArchive);
-  $('exportV15Btn').addEventListener('click',exportV15);
-  $('exportReportBtn').addEventListener('click',exportReport);
 
   $('librarySearch').addEventListener('input',renderLibrary);
   $('librarySearch').addEventListener('search',renderLibrary);
@@ -85,12 +85,18 @@ function setup(){
   $('viewerTranscriptBtn').addEventListener('click',()=>closeViewerPreview(true));
   $('viewerImageIndexBtn').addEventListener('click',toggleViewerImageMeta);
   $('viewerImagePromptsBtn').addEventListener('click',toggleViewerImagePrompts);
+  $('viewerPromptSearch').addEventListener('input',handleViewerPromptSearchInput);
+  $('viewerPromptSearch').addEventListener('search',handleViewerPromptSearchInput);
+  $('viewerPromptSearch').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();moveViewerPromptMatch(e.shiftKey?-1:1);}});
+  $('viewerPromptSearchGo').addEventListener('click',()=>moveViewerPromptMatch(1));
   $('viewerPreviewGrid').addEventListener('click',handleViewerPreviewClick);
   $('viewerImageLightboxClose').addEventListener('click',closeViewerImageLightbox);
   $('viewerImageLightbox').addEventListener('click',e=>{if(e.target===$('viewerImageLightbox'))closeViewerImageLightbox();});
   $('viewerTranscript').addEventListener('click',handleViewerTranscriptClick);
   document.addEventListener('click',e=>{
     if(!$('viewerLayerCtl').contains(e.target))$('viewerLayerCtl').classList.remove('open');
+    if(!$('homeExportCtl')?.contains(e.target))$('homeExportCtl')?.classList.remove('open');
+    if(!$('homeModeCtl')?.contains(e.target))$('homeModeCtl')?.classList.remove('open');
     if(!$('appSettingsPanel')?.contains(e.target)&&e.target!==$('appSettingsBtn'))$('appSettingsPanel').hidden=true;
     if(!$('appInfoPanel')?.contains(e.target)&&e.target!==$('appMoreBtn'))$('appInfoPanel').hidden=true;
     if(!$('viewerActions').contains(e.target)&&e.target!==$('viewerMoreBtn')&&e.target!==$('viewerPreviewMoreBtn'))$('viewerActions').hidden=true;
@@ -137,6 +143,7 @@ const UI_TEXT={
   library:{ja:'ライブラリ',en:'Library'},libraryDesc:{ja:'読み込んだ会話はこのWebアプリ内に保存し、そのまま検索・閲覧できます。',en:'Imported conversations can be stored, searched, and read in this web app.'},
   storageLimits:{ja:'保存方式と限界',en:'Storage & limits'},storageLimitsDesc:{ja:'IndexedDB / OPFSを使用。重要な会話はArchive Bundle / v15 HTMLも残してください。',en:'Uses IndexedDB / OPFS. Keep an Archive Bundle / v15 HTML backup for important conversations.'},
   savedConversations:{ja:'保存済み会話',en:'Saved Conversations'},titleSearch:{ja:'Title',en:'Title'},fullTextSearch:{ja:'全文',en:'Full Text'},
+  saveToLibrary:{ja:'ライブラリへ保存',en:'Save to Library'},quickCompact:{ja:'手軽に保存',en:'Quick'},verifyCompact:{ja:'完成保存',en:'Verify'},
   librarySearchPlaceholder:{ja:'タイトル・保存元を検索',en:'Search title / source'},libraryFullSearchPlaceholder:{ja:'全会話の本文を単語検索',en:'Search full text across all conversations'},
   quickTitle:{ja:'手軽に保存',en:'Quick Capture'},quickDesc:{ja:'v15 HTML / SingleFile HTML / JSONを読み込み、選択した会話をライブラリへ保存。',en:'Import v15 HTML / SingleFile HTML / JSON and save selected conversations to the library.'},
   verifiedTitle:{ja:'完成保存',en:'Verified Archive'},verifiedDesc:{ja:'OpenAI Exportを内部検査し、独立キャプチャとの本文・分岐差分まで照合。',en:'Inspect an OpenAI Export and compare body / branch differences against an independent capture.'},
@@ -145,11 +152,10 @@ const UI_TEXT={
   integrity:{ja:'内部完全性',en:'Internal integrity'},conversation:{ja:'会話',en:'Conversation'},compare:{ja:'本文・枝分かれ照合',en:'Body / branch comparison'},compareAction:{ja:'照合する',en:'Compare'},
   libraryHint:{ja:'会話をタップして開く · 検証時はA/Bへドラッグ',en:'Tap to open · drag to A/B for verification'},refresh:{ja:'更新',en:'Refresh'}
 };
-function savedUiLanguage(){try{return localStorage.getItem('ada-ui-language')||'ja';}catch{return'ja';}}
+function savedUiLanguage(){try{const v=localStorage.getItem('ada-ui-language');return v==='en'?'en':'ja';}catch{return'ja';}}
 function uiText(key){
   const pair=UI_TEXT[key];if(!pair)return key;
   if(state.uiLanguage==='en')return pair.en;
-  if(state.uiLanguage==='bi')return `${pair.ja} / ${pair.en}`;
   return pair.ja;
 }
 function applyUiLanguage(){
@@ -157,9 +163,10 @@ function applyUiLanguage(){
   document.querySelectorAll('[data-i18n]').forEach(el=>{const key=el.dataset.i18n;if(UI_TEXT[key])el.textContent=uiText(key);});
   document.querySelectorAll('[data-ui-language]').forEach(btn=>btn.classList.toggle('active',btn.dataset.uiLanguage===state.uiLanguage));
   setLibrarySearchMode(state.librarySearchMode,true);
+  syncHomeActionLabels();
 }
 function setUiLanguage(lang){
-  state.uiLanguage=['ja','en','bi'].includes(lang)?lang:'ja';
+  state.uiLanguage=['ja','en'].includes(lang)?lang:'ja';
   try{localStorage.setItem('ada-ui-language',state.uiLanguage);}catch{}
   applyUiLanguage();renderLibrary();
 }
@@ -170,9 +177,27 @@ function toggleHomePopover(id){
 }
 function setLibrarySearchMode(mode,skipRender=false){
   state.librarySearchMode=mode==='full'?'full':'title';
-  document.querySelectorAll('[data-library-search-mode]').forEach(btn=>btn.classList.toggle('active',btn.dataset.librarySearchMode===state.librarySearchMode));
+  const b=$('librarySearchModeBtn');if(b){b.textContent=state.librarySearchMode==='full'?uiText('fullTextSearch'):uiText('titleSearch');b.setAttribute('aria-label',state.librarySearchMode==='full'?'全文検索からTitle検索へ切替':'Title検索から全文検索へ切替');}
   const input=$('librarySearch');if(input)input.placeholder=state.librarySearchMode==='full'?uiText('libraryFullSearchPlaceholder'):uiText('librarySearchPlaceholder');
   if(!skipRender&&$('libraryList'))renderLibrary();
+}
+function syncHomeActionLabels(){
+  const exportLabels={library:uiText('saveToLibrary'),bundle:'Archive Bundle',v15:'v15 HTML',report:'Verification Report'};
+  if($('homeExportLabel'))$('homeExportLabel').textContent=exportLabels[state.homeExportAction]||exportLabels.library;
+  document.querySelectorAll('[data-export-action]').forEach(btn=>{const check=btn.lastElementChild;if(check)check.textContent=btn.dataset.exportAction===state.homeExportAction?'✓':'';});
+  if($('homeModeLabel'))$('homeModeLabel').textContent=state.mode==='verified'?uiText('verifyCompact'):uiText('quickCompact');
+  document.querySelectorAll('[data-home-mode]').forEach(btn=>{const check=btn.lastElementChild;if(check)check.textContent=btn.dataset.homeMode===state.mode?'✓':'';});
+}
+function setHomeExportAction(action){
+  state.homeExportAction=['library','bundle','v15','report'].includes(action)?action:'library';
+  $('homeExportCtl')?.classList.remove('open');syncHomeActionLabels();
+}
+function executeHomeExportAction(){
+  const action=state.homeExportAction;
+  if(action==='bundle')return exportArchive();
+  if(action==='v15')return exportV15();
+  if(action==='report')return exportReport();
+  return saveLocal();
 }
 function openFirstLibrarySearchResult(){const first=state.librarySearchResults?.[0];if(first?.id)openArchive(first.id);}
 
@@ -181,7 +206,7 @@ setup();
 function setMode(mode){
   state.mode=mode;
   document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
-  $('modeDescription').textContent=mode==='quick'?'Quick Capture':'Verified Archive';
+  syncHomeActionLabels();
   if(mode==='verified'&&state.sources.length)autoCrossVerify().catch(e=>toast(`自動照合エラー: ${e.message}`));
 }
 
@@ -544,12 +569,12 @@ async function openArchive(id){
     const archive=await getArchive(id);if(!archive){toast('保存済み会話が見つかりません。');await loadLibrary();return;}
     state.viewerArchive=archive;
     state.viewerCurrentNode=archive.conversation?.currentNode||bestLeafFrom(archive.conversation,null);
-    state.viewerLayer='visual';state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerImageMetaVisible=true;state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';state.viewerSearchSnapshots=null;
+    state.viewerLayer='visual';state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerImageMetaVisible=true;state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';state.viewerSearchSnapshots=null;state.viewerPromptMatches=[];state.viewerPromptMatchIndex=-1;state.viewerPromptSearchSnapshots=null;state.viewerPromptLastSearchQuery='';
     $('viewerTitle').textContent=archive.title||'(無題)';
     $('viewerPreviewTitle').textContent=archive.title||'(無題)';
     $('viewerUpdatedAt').textContent=formatDate(archive.updatedAt||archive.savedAt);
-    $('viewerSearch').value='';$('viewerActions').hidden=true;$('viewerHistoryPanel').hidden=true;$('viewerOverviewPanel').hidden=true;
-    $('viewerImagePromptsPanel').hidden=true;$('viewerImagePromptsBtn').textContent='▸ Image Prompts';
+    $('viewerSearch').value='';$('viewerActions').hidden=true;$('viewerHistoryPanel').hidden=true;$('viewerOverviewPanel').hidden=true;$('libraryViewer').classList.remove('overview-open');
+    $('viewerPromptSearch').value='';$('viewerPromptMatchCount').textContent='0 / 0';$('viewerImagePromptsPanel').hidden=true;$('viewerImagePromptsBtn').textContent='Image Prompts';
     applySavedViewerTheme();
     $('libraryViewer').hidden=false;document.body.classList.add('viewer-open');
     $('libraryViewer').scrollTop=0;
@@ -561,7 +586,8 @@ async function openArchive(id){
 function closeViewer(){
   closeViewerPreview(false);
   $('libraryViewer').hidden=true;document.body.classList.remove('viewer-open');
-  state.viewerArchive=null;state.viewerCurrentNode=null;state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';state.viewerSearchSnapshots=null;
+  $('libraryViewer').classList.remove('overview-open');
+  state.viewerArchive=null;state.viewerCurrentNode=null;state.viewerMatches=[];state.viewerMatchIndex=-1;state.viewerImages=[];state.viewerSearchOrigin=null;state.viewerLastSearchQuery='';state.viewerSearchSnapshots=null;state.viewerPromptMatches=[];state.viewerPromptMatchIndex=-1;state.viewerPromptSearchSnapshots=null;state.viewerPromptLastSearchQuery='';
 }
 
 function renderViewerMeta(){
@@ -577,15 +603,12 @@ function renderViewerHeaderPanels(){
   const overview=conv.overview||a.overview||null;
   const storedKeywords=conv.keywords||a.keywords||null;
   const summaryText=typeof overview==='string'?overview:(overview?.summary||'保存済みOverviewはありません。');
-  const localKeywords=deriveLocalKeywords(conv,12);
-  const storedKeywordText=Array.isArray(storedKeywords)?storedKeywords.join(' / '):typeof storedKeywords==='string'?storedKeywords:'';
+  const localKeywords=deriveLocalKeywords(conv,24);
+  const storedKeywordList=Array.isArray(storedKeywords)?storedKeywords:typeof storedKeywords==='string'?storedKeywords.split(/\s*[/,、]\s*/).filter(Boolean):[];
   const aiCandidates=conv.aiAnnotations?.keywords||conv.aiAnnotations?.keyConcepts||a.aiAnnotations?.keywords||a.aiAnnotations?.keyConcepts||overview?.aiKeywords||overview?.keyConcepts||null;
-  const aiKeywordText=Array.isArray(aiCandidates)?aiCandidates.join(' / '):typeof aiCandidates==='string'?aiCandidates:'';
-  const rows=[];
-  if(localKeywords.length)rows.push(`<div class="viewer-overview-keywords"><span class="viewer-overview-source">重要語句 · LOCAL</span>${escapeHtml(localKeywords.join(' / '))}</div>`);
-  if(storedKeywordText)rows.push(`<div class="viewer-overview-keywords"><span class="viewer-overview-source">SAVED</span>${escapeHtml(storedKeywordText)}</div>`);
-  if(aiKeywordText)rows.push(`<div class="viewer-overview-keywords"><span class="viewer-overview-source">AI KEY CONCEPTS</span>${escapeHtml(aiKeywordText)}</div>`);
-  $('viewerOverviewPanel').innerHTML=`<div class="viewer-overview-summary">${escapeHtml(summaryText)}</div>${rows.join('')}`;
+  const aiKeywordList=Array.isArray(aiCandidates)?aiCandidates:typeof aiCandidates==='string'?aiCandidates.split(/\s*[/,、]\s*/).filter(Boolean):[];
+  const chips=(items,cls='')=>items.map(x=>`<span class="viewer-concept-chip ${cls}">${escapeHtml(String(x))}</span>`).join('');
+  $('viewerOverviewPanel').innerHTML=`<section class="viewer-meaning-half viewer-meaning-summary"><div class="viewer-meaning-label">Summary</div><div class="viewer-overview-summary">${escapeHtml(summaryText)}</div></section><section class="viewer-meaning-half viewer-meaning-concepts"><div class="viewer-meaning-label">Key Concepts / Keywords</div><div class="viewer-concept-group"><span class="viewer-overview-source">LOCAL</span><div class="viewer-concept-cloud">${chips(localKeywords)}</div></div>${storedKeywordList.length?`<div class="viewer-concept-group"><span class="viewer-overview-source">SAVED</span><div class="viewer-concept-cloud">${chips(storedKeywordList,'saved')}</div></div>`:''}${aiKeywordList.length?`<div class="viewer-concept-group"><span class="viewer-overview-source">AI KEY CONCEPTS</span><div class="viewer-concept-cloud">${chips(aiKeywordList,'ai')}</div></div>`:''}</section>`;
 }
 
 function deriveLocalKeywords(conv,limit=12){
@@ -639,10 +662,17 @@ function deriveLocalKeywords(conv,limit=12){
     .slice(0,limit).map(x=>({ai:'AI',ui:'UI',iq:'IQ',api:'API',html:'HTML',json:'JSON',svg:'SVG',css:'CSS',javascript:'JavaScript'}[x.token]||x.token));
 }
 
-function toggleViewerOverview(){
-  const p=$('viewerOverviewPanel');p.hidden=!p.hidden;
-  $('viewerOverviewBtn').textContent=`${p.hidden?'▸':'▾'} Overview & Key Concepts`;
+function setViewerOverviewOpen(open){
+  const p=$('viewerOverviewPanel'),viewer=$('libraryViewer');if(!p||!viewer)return;
+  p.hidden=!open;viewer.classList.toggle('overview-open',open);
+  $('viewerOverviewBtn').textContent='Overview & Key Concepts';
+  if(open){
+    const header=viewer.querySelector('.viewer-sticky-header');
+    const bottom=header?.getBoundingClientRect().bottom||0;
+    viewer.style.setProperty('--viewer-meaning-top',`${Math.ceil(bottom)}px`);
+  }else viewer.style.removeProperty('--viewer-meaning-top');
 }
+function toggleViewerOverview(){setViewerOverviewOpen($('viewerOverviewPanel').hidden);}
 
 function applySavedViewerTheme(){
   const dark=savedTheme()==='dark';
@@ -851,6 +881,7 @@ function applyViewerSearch({jumpToFirst=false,resetIndex=false,showCurrent=false
 }
 function moveViewerMatch(delta){
   const q=String($('viewerSearch').value||'').trim();if(!q)return;
+  if(!$('viewerOverviewPanel').hidden)setViewerOverviewOpen(false);
   if(!state.viewerMatches.length)applyViewerSearch({resetIndex:true,showCurrent:false});
   if(!state.viewerMatches.length)return;
   if(state.viewerMatchIndex<0)state.viewerMatchIndex=delta<0?state.viewerMatches.length-1:0;
@@ -913,6 +944,7 @@ function collectViewerImages(){
 
 function imageSizeLabel(img){return img.width&&img.height?`${img.width} × ${img.height}`:'size unknown';}
 function renderViewerPreview(){
+  state.viewerPromptSearchSnapshots=null;state.viewerPromptMatches=[];state.viewerPromptMatchIndex=-1;state.viewerPromptLastSearchQuery='';if($('viewerPromptSearch'))$('viewerPromptSearch').value='';if($('viewerPromptMatchCount'))$('viewerPromptMatchCount').textContent='0 / 0';
   const imgs=state.viewerImages||[];$('viewerImageCount').textContent=`${imgs.length} ${imgs.length===1?'image':'images'}`;
   $('viewerPreviewGrid').classList.toggle('hide-meta',!state.viewerImageMetaVisible);
   $('viewerPreviewGrid').innerHTML=imgs.map(img=>`<article class="viewer-preview-item" data-preview-index="${img.index}"><button class="viewer-preview-number viewer-preview-jump" data-preview-jump="${escapeHtml(img.nodeId)}" aria-label="本文の画像 ${img.index} へ移動">${img.index}</button>${img.src?`<button class="viewer-preview-image-button" data-preview-open="${img.index}" aria-label="画像 ${img.index} を拡大"><img src="${escapeHtml(img.src)}" alt="${escapeHtml(img.alt)}" data-preview-natural="${img.index}"></button>`:`<span class="viewer-preview-placeholder">External image<br><small>本文から明示的に開けます</small></span>`}<span class="viewer-preview-meta"><span class="viewer-preview-size" data-preview-size="${img.index}">${escapeHtml(imageSizeLabel(img))}</span><span class="viewer-preview-prompt">${escapeHtml(img.prompt)}</span></span></article>`).join('')||'<div class="empty-state">画像はありません。</div>';
@@ -955,7 +987,54 @@ function toggleViewerImageMeta(){
 }
 function toggleViewerImagePrompts(){
   const p=$('viewerImagePromptsPanel');p.hidden=!p.hidden;
-  $('viewerImagePromptsBtn').textContent=`${p.hidden?'▸':'▾'} Image Prompts`;
+  $('viewerImagePromptsBtn').textContent='Image Prompts';
+}
+
+
+function captureViewerPromptSearchSnapshots(){
+  if(state.viewerPromptSearchSnapshots)return;
+  state.viewerPromptSearchSnapshots=$('viewerImagePromptsPanel').innerHTML;
+}
+function restoreViewerPromptSearchSnapshots({keep=false}={}){
+  const snap=state.viewerPromptSearchSnapshots;if(snap==null)return false;
+  $('viewerImagePromptsPanel').innerHTML=snap;
+  state.viewerPromptMatches=[];state.viewerPromptMatchIndex=-1;
+  if(!keep)state.viewerPromptSearchSnapshots=null;
+  return true;
+}
+function handleViewerPromptSearchInput(){
+  const q=String($('viewerPromptSearch').value||'').trim();
+  if(!q){restoreViewerPromptSearchSnapshots();state.viewerPromptLastSearchQuery='';state.viewerPromptMatches=[];state.viewerPromptMatchIndex=-1;$('viewerPromptMatchCount').textContent='0 / 0';return;}
+  if(!state.viewerPromptLastSearchQuery)captureViewerPromptSearchSnapshots();
+  state.viewerPromptLastSearchQuery=q;applyViewerPromptSearch({resetIndex:true});
+}
+function applyViewerPromptSearch({resetIndex=false}={}){
+  const q=String($('viewerPromptSearch').value||'').trim();if(!q){$('viewerPromptMatchCount').textContent='0 / 0';return;}
+  captureViewerPromptSearchSnapshots();restoreViewerPromptSearchSnapshots({keep:true});
+  const root=$('viewerImagePromptsPanel'),needle=q.toLocaleLowerCase('ja'),walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode(node){
+    if(!node.nodeValue||!node.parentElement?.closest('.viewer-prompt-text'))return NodeFilter.FILTER_REJECT;
+    return node.nodeValue.toLocaleLowerCase('ja').includes(needle)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;
+  }}),nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  state.viewerPromptMatches=[];
+  for(const node of nodes){
+    const raw=node.nodeValue,low=raw.toLocaleLowerCase('ja');let pos=0,at=low.indexOf(needle,pos);const frag=document.createDocumentFragment();
+    while(at>=0){if(at>pos)frag.append(document.createTextNode(raw.slice(pos,at)));const mark=document.createElement('mark');mark.className='viewer-hit viewer-prompt-hit';mark.textContent=raw.slice(at,at+q.length);frag.append(mark);state.viewerPromptMatches.push(mark);pos=at+q.length;at=low.indexOf(needle,pos);}
+    if(pos<raw.length)frag.append(document.createTextNode(raw.slice(pos)));node.replaceWith(frag);
+  }
+  if(resetIndex)state.viewerPromptMatchIndex=-1;
+  $('viewerPromptMatchCount').textContent=state.viewerPromptMatchIndex>=0?`${state.viewerPromptMatchIndex+1} / ${state.viewerPromptMatches.length}`:`0 / ${state.viewerPromptMatches.length}`;
+}
+function moveViewerPromptMatch(delta){
+  const q=String($('viewerPromptSearch').value||'').trim();if(!q)return;
+  if($('viewerImagePromptsPanel').hidden)$('viewerImagePromptsPanel').hidden=false;
+  if(!state.viewerPromptMatches.length)applyViewerPromptSearch({resetIndex:true});
+  if(!state.viewerPromptMatches.length)return;
+  if(state.viewerPromptMatchIndex<0)state.viewerPromptMatchIndex=delta<0?state.viewerPromptMatches.length-1:0;
+  else state.viewerPromptMatchIndex=(state.viewerPromptMatchIndex+delta+state.viewerPromptMatches.length)%state.viewerPromptMatches.length;
+  state.viewerPromptMatches.forEach(m=>m.classList.remove('search-current'));
+  const mark=state.viewerPromptMatches[state.viewerPromptMatchIndex];if(!mark)return;
+  mark.classList.add('search-current');$('viewerPromptMatchCount').textContent=`${state.viewerPromptMatchIndex+1} / ${state.viewerPromptMatches.length}`;
+  requestAnimationFrame(()=>mark.scrollIntoView({behavior:'smooth',block:'center'}));
 }
 
 function pathToNode(conv,target){
